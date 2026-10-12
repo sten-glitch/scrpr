@@ -89,7 +89,8 @@ def _decode_descriptors(blob):
     cv2, np = _vision_libs()
     decompressor = zlib.decompressobj()
     data = decompressor.decompress(blob, 750 * 32 + 1)
-    if not decompressor.eof or len(data) == 0 or len(data) % 32 != 0 or len(data) > 750 * 32:
+    if (not decompressor.eof or decompressor.unused_data or decompressor.unconsumed_tail
+            or len(data) == 0 or len(data) % 32 != 0 or len(data) > 750 * 32):
         raise ReferenceMatchError("Invalid stored ORB descriptor data")
     return np.frombuffer(data, dtype=np.uint8).reshape((-1, 32)).copy()
 
@@ -206,7 +207,7 @@ class ReferenceMatcher:
         if not path.is_file() or path.stat().st_size > 120 * 1024 * 1024:
             raise ReferenceMatchError("Missing or oversized private reference index")
         # mode=ro guarantees image-matching cannot mutate reviewed records.
-        uri = "file:" + urllib.parse.quote(str(path)) + "?mode=ro"
+        uri = path.as_uri() + "?mode=ro"
         try:
             with sqlite3.connect(uri, uri=True) as db:
                 meta = dict(db.execute("SELECT key,value FROM metadata"))
@@ -270,6 +271,15 @@ class ReferenceMatcher:
         return {"status":status,"reason":reason,
                 "matched_identity_key":best["identity_key"] if status=="VISUAL_CANDIDATE" else None,
                 "candidates":candidates}
+
+    def match_entire_photo(self, image_bytes: bytes) -> dict:
+        """Photo-closeup fallback when no contours were detected.
+
+        This never becomes a verified object detection. It merely offers an
+        independently reviewable whole-frame reference-image candidate.
+        """
+        _, mat = _checked_image(image_bytes)
+        return self.match_bgr(mat)
 
     def match_observations(self, images: list[bytes], observations: list[dict]) -> list[dict]:
         if not isinstance(images,list) or not isinstance(observations,list) or len(images)>8 or len(observations)>100:
