@@ -58,45 +58,72 @@ def _demo_card(seed: int):
     return img
 
 
-def create_demo(root: str | Path="private", *, test_match=True) -> dict:
+def create_demo(root: str | Path="private", *, test_match=True,
+                resume: bool=False) -> dict:
+    """Build demo without clobbering files; --resume repairs interrupted setup.
+
+    All existing demo assets must exactly match generated geometric originals.
+    Arbitrary user files are never overwritten or treated as demo evidence.
+    """
     root=Path(root)
     ref_dir=root/"demo_references"
     query_dir=root/"demo_queries"
     target=root/"demo_cards.sqlite"
     catalog_file=root/"demo_catalog.json"
     manifest_file=root/"demo_reference_manifest.json"
-    # Refuse replacement of private user-created files; keep demonstration
-    # opt-in and non-destructive.
     files=[target,catalog_file,manifest_file,
            ref_dir/"demo_reference_A.png",ref_dir/"demo_reference_B.png",
            query_dir/"demo_query_A.png"]
-    if any(p.exists() for p in files):
+    if target.exists():
+        raise ValueError("Demo index already exists; refusing to overwrite private files")
+    if not resume and any(p.exists() for p in files):
         raise ValueError("Demo already exists; refusing to overwrite private files")
-    ref_dir.mkdir(parents=True,exist_ok=True)
-    query_dir.mkdir(parents=True,exist_ok=True)
     cv2,np,_=_modules()
-    manifest={"references":[]}
-    for seed, label in ((1,"A"),(2,"B")):
-        picture=_demo_card(seed)
-        reference_name=f"demo_reference_{label}.png"
-        if not cv2.imwrite(str(ref_dir/reference_name),picture):
-            raise ValueError("Unable to create synthetic reference")
-        manifest["references"].append({
-            "reference_id":f"synthetic_{label}_generated",
-            "identity_key":f"bigsten:synthetic:{label}",
-            "image_file":reference_name,
-            "rights_basis":"user_owned",
-            "permission_reference":"COMPUTER_GENERATED_GEOMETRIC_DEMO",
-        })
-        if seed==1:
-            # Separate file and modest brightness change; close enough for
-            # demonstrator, but NOT independent real-world model validation.
-            query=cv2.convertScaleAbs(picture,alpha=.92,beta=5)
-            if not cv2.imwrite(str(query_dir/"demo_query_A.png"),query):
-                raise ValueError("Unable to create synthetic query")
-    catalog_file.write_text(json.dumps(DEMO_CATALOG,indent=2)+"\n",encoding="utf-8")
-    manifest_file.write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    stats=build_reference_index(manifest,ref_dir,target,DEMO_CATALOG)
+    images={"A":_demo_card(1),"B":_demo_card(2)}
+    query=cv2.convertScaleAbs(images["A"],alpha=.92,beta=5)
+    expected_manifest={"references":[{
+        "reference_id":f"synthetic_{label}_generated",
+        "identity_key":f"bigsten:synthetic:{label}",
+        "image_file":f"demo_reference_{label}.png",
+        "rights_basis":"user_owned",
+        "permission_reference":"COMPUTER_GENERATED_GEOMETRIC_DEMO",
+    } for label in ("A","B")]}
+
+    def keep_or_create_image(path, expected):
+        if path.exists():
+            if not path.is_file():
+                raise ValueError("Demo asset path is not a file: "+str(path))
+            existing=cv2.imread(str(path),cv2.IMREAD_COLOR)
+            if existing is None or not np.array_equal(existing,expected):
+                raise ValueError("Existing demo image differs; refusing to overwrite: "+str(path))
+            return
+        path.parent.mkdir(parents=True,exist_ok=True)
+        if not cv2.imwrite(str(path),expected):
+            raise ValueError("Unable to create synthetic image: "+str(path))
+
+    def keep_or_create_json(path, expected):
+        if path.exists():
+            if not path.is_file():
+                raise ValueError("Demo asset path is not a file: "+str(path))
+            try:
+                existing=json.loads(path.read_text(encoding="utf-8"))
+            except (OSError,UnicodeError,json.JSONDecodeError) as exc:
+                raise ValueError("Existing demo JSON invalid; refusing to overwrite") from exc
+            if existing != expected:
+                raise ValueError("Existing demo JSON differs; refusing to overwrite: "+str(path))
+            return
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_text(json.dumps(expected,indent=2)+"\n",encoding="utf-8")
+
+    # If a previous run failed on Windows after writing the photos and
+    # manifest, --resume safely rebuilds only the missing index.
+    for label,image in images.items():
+        keep_or_create_image(ref_dir/f"demo_reference_{label}.png",image)
+    keep_or_create_image(query_dir/"demo_query_A.png",query)
+    keep_or_create_json(catalog_file,DEMO_CATALOG)
+    keep_or_create_json(manifest_file,expected_manifest)
+
+    stats=build_reference_index(expected_manifest,ref_dir,target,DEMO_CATALOG)
     result={
         "status":"SYNTHETIC_DEMONSTRATION_ONLY",
         "reference_count":stats["reference_count"],
@@ -121,8 +148,10 @@ def create_demo(root: str | Path="private", *, test_match=True) -> dict:
 def main(argv=None):
     p=argparse.ArgumentParser(description="Offline geometric card image matching demo (not Pokémon imagery)")
     p.add_argument("--root",default="private",help="Private local output folder")
+    p.add_argument("--resume",action="store_true",
+                   help="Resume interrupted demo by validating existing generated assets, without overwriting")
     args=p.parse_args(argv)
-    result=create_demo(args.root)
+    result=create_demo(args.root,resume=args.resume)
     print(json.dumps(result,ensure_ascii=False,indent=2))
     print("Now run local_app.py --catalog "+result["catalog"]+" --reference-index "+result["index"])
     print("Upload "+result["query_image"]+" from the browser.")
