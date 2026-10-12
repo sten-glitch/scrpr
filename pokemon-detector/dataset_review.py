@@ -148,6 +148,9 @@ class PhotoReviewStore:
             raise PhotoReviewError("Photo Review Lab only produces heldout labels")
         if record.get("annotation_verified") is not True:
             raise PhotoReviewError("Reviewer must explicitly confirm independent ground truth")
+        photo_origin = record.get("photo_origin", "unknown")
+        if photo_origin not in {"real_photo", "synthetic_demo", "unknown"}:
+            raise PhotoReviewError("Invalid photo origin")
         kind = record.get("kind")
         if kind not in KINDS:
             raise PhotoReviewError("Unsupported case category")
@@ -181,6 +184,7 @@ class PhotoReviewStore:
             reviewed_at = dt.datetime.now(dt.timezone.utc).date().isoformat()
         return {
             "case_id":cid, "kind":kind, "split":"holdout",
+            "photo_origin":photo_origin,
             "image_file":name, "expected_identity_key":expected,
             "bbox_xyxy":box, "annotation_verified":True,
             "annotation_reference":evidence.strip(), "reviewer":reviewer.strip(),
@@ -206,8 +210,9 @@ class PhotoReviewStore:
             count={"single":0,"graded":0,"binder":0,"lot":0,"sealed":0,"negative":0}
             for row in cases:
                 count[row["kind"]]+=1
+            real_photos={row["image_file"] for row in cases if row["photo_origin"]=="real_photo"}
             return {"images":list(self.photo_names), "cases":cases,
-                    "photo_count":len(self.photo_names),
+                    "photo_count":len(self.photo_names), "real_labeled_photos":len(real_photos),
                     "labeled_photos":len(by_photo), "labeled_cases":len(cases),
                     "target_cases":50, "by_kind":count,
                     "status":"PRIVATE_REVIEW_ONLY_NOT_CALIBRATED",
