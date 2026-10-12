@@ -29,6 +29,29 @@ BIGSTEN source code:
 **The source images are never committed to the public repository.** Store all
 photos/annotation files in the ignored private directory.
 
+## Small no-account sample already exercised on GitHub Actions
+
+A one-time public-source smoke test successfully fetched and processed
+**seven genuine online photographs** (four licensed Commons candidates
+and three public Roboflow example thumbnails), yielding **two provisional
+card-like contours**. See the [GitHub Actions run](https://github.com/sten-glitch/scrpr/actions/runs/38279892391).
+The images were discarded when the runner exited. Those two detections are
+NOT manually verified cards; this is NOT a recognition precision score.
+The one-time network step was removed from ongoing CI afterwards.
+
+To collect the same three public Roboflow preview thumbnails locally
+without creating a Roboflow account:
+
+    py -3 external_photo_sources.py previews --dry-run
+    py -3 external_photo_sources.py previews
+
+They are saved privately to private/web-research/roboflow-previews alongside
+a SOURCE_ATTRIBUTION.json manifest. They are small public thumbnails and
+are NOT a substitute for full-resolution, licensed, expert-labeled photos.
+The dataset-page CC BY notice does not automatically clear embedded card art.
+On Windows, start-web-photo-research.bat now attempts these three previews
+and Commons research photos in sequence.
+
 ## A. Download Commons photographs — no account required
 
 In the pokemon-detector folder on Windows:
