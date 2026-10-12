@@ -24,6 +24,30 @@ feed, no hosted accounts/billing/privacy protections, and no verified
 profitable investment strategy. P1 is NOT complete until independent photo
 accuracy and licensed-data gates pass. Current GitHub PR remains draft.
 
+### P1 Ground Truth Lab — added 12 October 2026
+
+- Local Photo Review Lab now runs at localhost port 8766, with an allowlisted
+  folder of independently permissioned physical photographs and a simple
+  click/drag bounding-box reviewer interface for single cards and binders.
+- Human-confirmed exact catalog keys, negative/unknown cases, grader/reviewer
+  reference, source photo provenance and SHA-256 integrity are retained
+  atomically in a PRIVATE JSON file. No images or private annotations were
+  included in the public GitHub repository.
+- The independent pHash/ORB benchmark counts unique photos separately from
+  per-card binder crops, rejects repeated/overlapping regions and source-file
+  duplicates, and refuses changed photos when label SHA-256 is present.
+- The benchmark explicitly differentiates real-world photos from generated
+  synthetic test data. At least 50 distinct **real** photos, five negatives,
+  three categories and reviewed provenance are a sampling gate only—not
+  verified precision or authorization to monetize.
+- An offline static HTML benchmark report exposes cohort errors and per-case
+  wrong identities, with no third-party CDN, photo content or external links.
+- The working annotation steps and test methodology are in PHOTO_REVIEW_LAB.md.
+
+**Remaining blocker:** No real collected/permissioned 50-photo dataset has
+been supplied or independently labeled yet. The P1 performance/accuracy
+gate therefore remains OPEN; CI success is not proof of market performance.
+
 ## Delivery roadmap and release gates
 
 | Phase | Planning window | Shippable outcome | Gate |
