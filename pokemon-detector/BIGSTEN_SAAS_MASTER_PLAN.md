@@ -48,6 +48,10 @@ accuracy and licensed-data gates pass. Current GitHub PR remains draft.
 been supplied or independently labeled yet. The P1 performance/accuracy
 gate therefore remains OPEN; CI success is not proof of market performance.
 
+### P1 research image discovery and import (12 October 2026)
+
+Discovered three publicly listed Roboflow image datasets (494 card-detector, 36 binder, 1,239 scanner images; per-page CC BY 4.0 dataset terms) and a Commons category with 24 mixed media files. Built legal-source registry, optional official Roboflow SDK download requiring authorized credentials, Wikimedia Commons metadata/license-driven importer, YOLO card-box IoU benchmark, and private export-to-human-review sampling. The tools **do not** assert that photos have been downloaded in this environment, source labels are perfect, commercial card-art rights are cleared, or these datasets measure exact card printing identity. See WEB_IMAGE_DATASETS.md.
+
 ## Delivery roadmap and release gates
 
 | Phase | Planning window | Shippable outcome | Gate |
