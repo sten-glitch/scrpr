@@ -1,0 +1,206 @@
+"""BIGSTEN local reference retrieval benchmark — independent held-out photos.
+
+No paid API, no network access. To avoid misleading accuracy claims:
+- query photos must be genuinely separate from reference-index source photos
+- identical-bytes queries are rejected (train/test leakage)
+- all expected identities are human-attested, not model-generated
+- unrecognized and non-catalog photos must also be represented
+- metrics count ABSTAIN and AMBIGUOUS instead of silently discarding them
+
+Reference matcher image similarity is NOT evidence of item authenticity/grade.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import math
+from collections import defaultdict
+from pathlib import Path
+
+from reference_matcher import ReferenceMatcher, ReferenceMatchError, _safe_reference
+from local_cv import _checked_image
+
+
+class ReferenceBenchmarkError(ValueError):
+    pass
+
+
+TYPES = {"single", "binder", "lot", "graded", "sealed", "negative"}
+
+
+def _fraction(n, d):
+    return round(n/d, 4) if d else None
+
+
+def _load_manifest_hashes(document: dict, image_root: str | Path):
+    if not isinstance(document, dict) or not isinstance(document.get("references"), list):
+        raise ReferenceBenchmarkError("Reference manifest must have references array")
+    hashes = set()
+    for ref in document["references"]:
+        if not isinstance(ref, dict):
+            raise ReferenceBenchmarkError("Invalid reference manifest record")
+        path = _safe_reference(Path(image_root), ref.get("image_file"))
+        if path.stat().st_size > 5 * 1024 * 1024:
+            raise ReferenceBenchmarkError("Reference file too large")
+        hashes.add(hashlib.sha256(path.read_bytes()).hexdigest())
+    if not hashes:
+        raise ReferenceBenchmarkError("No source reference images were supplied")
+    return hashes
+
+
+def _evaluate_photo(matcher: ReferenceMatcher, raw: bytes, box: list[float] | None):
+    if box is None:
+        return matcher.match_entire_photo(raw)
+    if (not isinstance(box,list) or len(box)!=4 or
+        any(isinstance(v,bool) or not isinstance(v,(float,int)) or not 0<=v<=1 for v in box)
+        or not box[0]<box[2] or not box[1]<box[3]):
+        raise ReferenceBenchmarkError("Invalid normalized bbox_xyxy")
+    _, mat = _checked_image(raw)
+    h,w=mat.shape[:2]
+    x1,y1,x2,y2=(int(box[0]*w),int(box[1]*h),int(box[2]*w),int(box[3]*h))
+    crop=mat[y1:y2,x1:x2]
+    if crop.size==0 or min(crop.shape[:2])<48:
+        return {"status":"ABSTAIN", "matched_identity_key":None,
+                "reason":"Small or empty crop", "candidates":[]}
+    return matcher.match_bgr(crop)
+
+
+def audit_references(matcher: ReferenceMatcher, test_data: dict,
+                     query_root: str | Path, reference_manifest: dict,
+                     reference_image_root: str | Path) -> dict:
+    if not isinstance(test_data,dict) or not isinstance(test_data.get("cases"),list):
+        raise ReferenceBenchmarkError("Expected JSON object with cases array")
+    cases=test_data["cases"]
+    if not 1<=len(cases)<=500:
+        raise ReferenceBenchmarkError("Expected 1..500 held-out cases")
+    ref_hashes=_load_manifest_hashes(reference_manifest,reference_image_root)
+    seen_ids,seen_query_hashes=set(),set()
+    row_results=[]
+    counts=defaultdict(int)
+    by_kind=defaultdict(lambda:defaultdict(int))
+    for record in cases:
+        if not isinstance(record,dict):
+            raise ReferenceBenchmarkError("Benchmark case must be an object")
+        case_id=record.get("case_id")
+        if not isinstance(case_id,str) or not case_id.strip() or len(case_id)>100 or case_id in seen_ids:
+            raise ReferenceBenchmarkError("Each case needs unique nonempty case_id")
+        seen_ids.add(case_id)
+        kind=record.get("kind")
+        if kind not in TYPES:
+            raise ReferenceBenchmarkError("Invalid test case category")
+        if record.get("split")!="holdout":
+            raise ReferenceBenchmarkError("Only independent held-out cases can count toward benchmark")
+        if record.get("annotation_verified") is not True:
+            raise ReferenceBenchmarkError("Human-attested ground-truth labels required")
+        proof=record.get("annotation_reference")
+        if not isinstance(proof,str) or not proof.strip():
+            raise ReferenceBenchmarkError("Missing independent ground-truth reference")
+        if "expected_identity_key" not in record:
+            raise ReferenceBenchmarkError("Expected identity_key field (null for negatives)")
+        expected=record["expected_identity_key"]
+        if expected is not None and (not isinstance(expected,str) or not expected.strip()):
+            raise ReferenceBenchmarkError("expected_identity_key must be exact text or null")
+        if kind=="negative" and expected is not None:
+            raise ReferenceBenchmarkError("Negative case cannot have a known positive identity")
+        path=_safe_reference(Path(query_root),record.get("image_file"))
+        if path.stat().st_size>5*1024*1024:
+            raise ReferenceBenchmarkError("Query photo exceeds 5 MiB")
+        raw=path.read_bytes()
+        digest=hashlib.sha256(raw).hexdigest()
+        if digest in ref_hashes:
+            raise ReferenceBenchmarkError(
+                f"Reference leakage: {case_id} is byte-identical to an indexed reference"
+            )
+        if digest in seen_query_hashes:
+            raise ReferenceBenchmarkError("Repeated query image would inflate test sample")
+        seen_query_hashes.add(digest)
+        result=_evaluate_photo(matcher,raw,record.get("bbox_xyxy"))
+        status=result.get("status")
+        if status not in {"ABSTAIN","AMBIGUOUS","VISUAL_CANDIDATE"}:
+            raise ReferenceBenchmarkError("Unexpected matcher status")
+        candidate=result.get("matched_identity_key") if status=="VISUAL_CANDIDATE" else None
+        if expected is None:
+            outcome="false_match" if candidate else "correct_rejection"
+            counts["negative_cases"]+=1
+            by_kind[kind]["negative_cases"]+=1
+        elif candidate==expected:
+            outcome="correct"
+            counts["positive_cases"]+=1
+            by_kind[kind]["positive_cases"]+=1
+        elif candidate:
+            outcome="wrong_identity"
+            counts["positive_cases"]+=1
+            by_kind[kind]["positive_cases"]+=1
+        else:
+            outcome="no_identity"
+            counts["positive_cases"]+=1
+            by_kind[kind]["positive_cases"]+=1
+        counts[outcome]+=1
+        counts[status]+=1
+        by_kind[kind][outcome]+=1
+        by_kind[kind][status]+=1
+        row_results.append({
+            "case_id":case_id,"kind":kind,"outcome":outcome,
+            "matcher_status":status,"expected_identity_key":expected,
+            "candidate_identity_key":candidate,
+            "top_candidates":[
+                {"identity_key":c.get("identity_key"),
+                 "phash_distance":c.get("phash_distance"),
+                 "orb_good_matches":c.get("orb_good_matches")}
+                for c in (result.get("candidates") or [])[:3]
+                if isinstance(c,dict)
+            ],
+        })
+    def metrics(c):
+        positives=c["positive_cases"]
+        negatives=c["negative_cases"]
+        accepted=c["correct"]+c["wrong_identity"]+c["false_match"]
+        return {
+            "cases":positives+negatives,
+            "known_card_recall":_fraction(c["correct"],positives),
+            "wrong_identity_rate_on_positives":_fraction(c["wrong_identity"],positives),
+            "false_match_rate_on_negatives":_fraction(c["false_match"],negatives),
+            "accepted_candidate_precision_on_labeled_cases":_fraction(c["correct"],accepted),
+            "abstain_rate":_fraction(c["ABSTAIN"],positives+negatives),
+            "ambiguous_rate":_fraction(c["AMBIGUOUS"],positives+negatives),
+            "counts":dict(c),
+        }
+    return {
+        "status":"HUMAN_ATTESTED_HELDOUT_REFERENCE_BENCHMARK",
+        "evaluated_at":dt.datetime.now(dt.timezone.utc).isoformat(),
+        "metrics":metrics(counts),
+        "by_kind":{k:metrics(v) for k,v in sorted(by_kind.items())},
+        "cases":row_results,
+        "limitations":[
+            "Independent handwritten labels are human attestations, not guaranteed truth",
+            "Byte-exact train/test duplicates are rejected; resized/near-duplicate leakage still needs human review",
+            "A high image match does not prove foil, authenticity, grade, stamp or original card identity",
+            "This dataset may be biased and cannot support population-wide accuracy claims without representative sampling",
+            "No financial outcome or resale performance is measured by this benchmark",
+        ],
+    }
+
+
+def main(argv=None):
+    p=argparse.ArgumentParser(description="Benchmark private pHash/ORB index on distinct held-out photos")
+    p.add_argument("dataset",help="Private JSON cases with human-attested labels")
+    p.add_argument("--index",required=True,help="Local SQLite image feature index")
+    p.add_argument("--query-root",required=True)
+    p.add_argument("--reference-manifest",required=True)
+    p.add_argument("--reference-image-root",required=True)
+    p.add_argument("--out",default="private/reference_accuracy.json")
+    args=p.parse_args(argv)
+    matcher=ReferenceMatcher(args.index)
+    cases=json.loads(Path(args.dataset).read_text(encoding="utf-8"))
+    manifest=json.loads(Path(args.reference_manifest).read_text(encoding="utf-8"))
+    report=audit_references(matcher,cases,args.query_root,manifest,args.reference_image_root)
+    target=Path(args.out)
+    target.parent.mkdir(exist_ok=True,parents=True)
+    target.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+    print(f"Evaluated {report['metrics']['cases']} held-out photos; result {target}")
+
+
+if __name__=="__main__":
+    main()
