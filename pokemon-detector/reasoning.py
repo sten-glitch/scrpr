@@ -103,6 +103,7 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
     priced_qty = 0
     confidence_numer = 0.0
     material_risk = False
+    weak_recent_sales = False  # sample-based indicator, not verified transaction velocity
     for i, item in enumerate(items):
         qty = item.get("quantity", 1)
         if isinstance(qty, bool) or not isinstance(qty, int) or not 1 <= qty <= 10000:
@@ -123,6 +124,10 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
             if authenticity < 0.8:
                 warnings.append("Sigiliul nu este verificat cu suficientă încredere")
         matched = _comps(item, asof)
+        recent_14d = sum((asof - _date(c["sold_at"])).days <= 14 for c in matched)
+        if len(matched) >= 3 and recent_14d < 2:
+            weak_recent_sales = True
+            warnings.append(f"Item {i + 1}: doar {recent_14d} comparabile observate în ultimele 14 zile; ieșirea rapidă este neconfirmată")
         prices = [c["price_eur"] for c in matched]
         valuation = round(_lower_quantile(prices), 2) if len(prices) >= 3 else None
         q = min(identity, condition, photo, authenticity)
@@ -137,7 +142,8 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
         if min(identity, condition, photo, authenticity) < 0.8:
             warnings.append(f"Item {i + 1}: identificarea, condiția sau autenticitatea necesită verificare")
         breakdown.append({"identity_key": item.get("identity_key"), "quantity": qty,
-                          "sold_comps_count": len(matched), "conservative_unit_resale_eur": valuation,
+                          "sold_comps_count": len(matched), "observed_sold_comps_last_14d": recent_14d,
+                          "sample_not_total_sales": True, "conservative_unit_resale_eur": valuation,
                           "confidence": confidence, "evidence_urls": [c["source_url"] for c in matched]})
 
     coverage = priced_qty / total_qty
@@ -161,6 +167,11 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
     elif listing.get("costs_verified") is not True:
         decision = "REVIEW"
         warnings.append("Costurile de achiziție și revânzare nu au fost validate; valorile lipsă nu sunt presupuse zero")
+    elif kind in ("lot", "binder") and listing.get("inventory_verified") is not True:
+        decision = "REVIEW"
+        warnings.append("Inventarul fizic/cantitățile din lot nu au fost reconciliate și validate")
+    elif weak_recent_sales:
+        decision = "REVIEW"
     elif overall_confidence < 0.8 or any("necesită verificare" in w for w in warnings):
         decision = "REVIEW"
     else:
@@ -184,7 +195,9 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
             "net_sale_proceeds_eur": net_sale, "net_profit_eur": profit, "roi": roi,
             "confidence": overall_confidence, "priced_quantity_coverage": round(coverage, 3),
             "reasons": reasons, "warnings": list(dict.fromkeys(warnings)),
-            "items": breakdown, "asof": asof.isoformat(), "manual_approval_required": True}
+            "items": breakdown, "asof": asof.isoformat(), "manual_approval_required": True,
+            "comparable_window_days": 90, "rapid_exit_window_days": 14,
+            "sampled_sales_not_market_volume": True}
 
 
 if __name__ == "__main__":
