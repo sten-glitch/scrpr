@@ -20,6 +20,7 @@ from reasoning import evaluate_deal
 from photo_inputs import prepare_photo_inputs, PhotoInputError
 from inventory_review import review_inventory
 from listing_truth import evaluate_listing_truth
+from catalog_candidates import suggest_for_observations
 
 KINDS = {"single", "graded", "lot", "binder", "sealed", "unknown"}
 FINISHES = {"normal", "holo", "reverse", "other", "unknown"}
@@ -356,6 +357,7 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
         for o, item in zip(norm["observations"], candidate["items"])
     ]
     truth = evaluate_listing_truth(listing, norm, resolutions)
+    suggestions = suggest_for_observations(catalog, norm["observations"]) if catalog else []
     if truth["status"] in {"CONFLICT_DETECTED", "HIGH_RISK_REVIEW"}:
         notes.append("Listing Truth Engine detected contradiction or risk; verify actual listing photos and item")
     return {
@@ -366,6 +368,7 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
         "visual_evidence": norm,
         "inventory_review": review,
         "catalog_resolutions": resolutions,
+        "catalog_suggestions": suggestions,
         "listing_truth": truth,
         "assessment": assessment,
         "open_questions": list(dict.fromkeys(
