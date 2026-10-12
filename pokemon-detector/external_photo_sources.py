@@ -51,8 +51,20 @@ SOURCES = {
         "version": 1,
         "task": "object_detection",
         "identity_labels": False,
-        "photos_reported": None,
+        "photos_reported": 36,
         "notes": "Public dataset and version must remain accessible; boxes are NOT card identities",
+    },
+    "scanner": {
+        "title": "Pokemon Scanner (instance segmentation)",
+        "url": "https://universe.roboflow.com/pokemon-card-detection-a3etk/pokemon-scanner-bzqii",
+        "license_displayed": "CC BY 4.0",
+        "workspace": "pokemon-card-detection-a3etk",
+        "project": "pokemon-scanner-bzqii",
+        "version": 1,
+        "task": "instance_segmentation",
+        "identity_labels": False,
+        "photos_reported": 1239,
+        "notes": "Polygon masks can be reduced to provisional card bounding boxes; no exact card ID",
     },
     "commons": {
         "title": "Wikimedia Commons: Pokemon Trading Card Game",
@@ -270,8 +282,8 @@ def download_roboflow(dataset: str, root="private/web-research"):
     Requires an accessible public dataset version and ROBOFLOW_API_KEY.
     No API key is saved in the research metadata or Git repository.
     """
-    if dataset not in ("detector", "binder"):
-        raise PhotoSourceError("Select detector or binder public source")
+    if dataset not in ("detector", "binder", "scanner"):
+        raise PhotoSourceError("Select detector, binder or scanner public source")
     key = os.environ.get("ROBOFLOW_API_KEY", "").strip()
     if not key:
         raise PhotoSourceError(
@@ -323,7 +335,7 @@ def main(argv=None):
     commons.add_argument("--out", default="private/web-research/commons")
     commons.add_argument("--dry-run", action="store_true")
     roboflow = commands.add_parser("roboflow", help="Official Roboflow authenticated dataset export")
-    roboflow.add_argument("--source", choices=["detector", "binder"], required=True)
+    roboflow.add_argument("--source", choices=["detector", "binder", "scanner"], required=True)
     roboflow.add_argument("--out", default="private/web-research")
     a = p.parse_args(argv)
     if a.command == "sources":
