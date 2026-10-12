@@ -132,7 +132,9 @@
       matchRows.slice(0, 20).forEach((match) => {
         const area = appendText(visualMatches, "div", "", "finding");
         appendText(area, "strong",
-          "Object #" + (Number(match.observation_index) + 1) + " — " + (match.status || "ABSTAIN"));
+          (match.scope === "whole_photo" ? "Entire photo (no card contour detected)" :
+            "Object #" + (Number(match.observation_index) + 1)) +
+          " — " + (match.status || "ABSTAIN"));
         appendText(area, "p", match.reason || "Manual verification required");
         const candidates = Array.isArray(match.candidates) ? match.candidates : [];
         candidates.slice(0, 3).forEach((candidate) => {
