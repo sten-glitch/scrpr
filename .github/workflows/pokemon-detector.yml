@@ -1,0 +1,64 @@
+name: Detector Pokémon — actualizare zilnică
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # 07:30 ora României; Cardmarket publică ghidul în jur de 02:45
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pokemon-detector
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: TCGdex (legătura între piețe)
+        uses: actions/checkout@v4
+        with:
+          repository: tcgdex/cards-database
+          path: tcgdex
+          sparse-checkout: data
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Teste
+        working-directory: pokemon-detector
+        run: |
+          python -m unittest discover -s tests -v
+          node tests/page.test.js
+
+      - name: Colectează prețurile
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          CARDTRADER_TOKEN: ${{ secrets.CARDTRADER_TOKEN }}
+        working-directory: pokemon-detector
+        run: python detector.py --tcgdex ../tcgdex/data --out docs/data --history history
+
+      - name: Salvează istoricul
+        run: |
+          git config user.name "detector-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pokemon-detector/history
+          git diff --cached --quiet || (git commit -m "Prețuri $(date -u +%F)" && git push)
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pokemon-detector/docs
+      - id: deploy
+        uses: actions/deploy-pages@v4

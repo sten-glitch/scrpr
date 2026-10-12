@@ -1,0 +1,45 @@
+# Detector Pokémon
+
+Detector zilnic de oportunități pentru cărți Pokémon. Compară Cardmarket, CardTrader, eBay (DE, FR, IT, ES, UK, SUA) și TCGplayer (SUA), calculează prețul adus în România și clasează cărțile după momentum, marjă și lichiditate.
+
+Rulează singur în fiecare dimineață la 07:30 (ora României) prin GitHub Actions și publică rezultatul pe GitHub Pages: `https://sten-glitch.github.io/scrpr/`.
+
+## Surse (fără scraping)
+
+| Piață | Regiune | Ce citim | Acces |
+|---|---|---|---|
+| Cardmarket | UE | ghidul public zilnic: trend, cea mai ieftină ofertă, medii 24h/7z/30z | public, fără cheie |
+| CardTrader | UE | cea mai ieftină ofertă EN Near Mint | token gratuit din cont |
+| eBay DE/FR/IT/ES/UK/SUA | UE, UK, SUA | anunțuri „Cumpără acum” prin Browse API, adus în RO | cheie gratuită developer.ebay.com |
+| TCGplayer (prin tcgcsv.com) | SUA | prețul de piață | public, fără cheie |
+| TCGdex (GitHub, MIT) | toate | leagă aceeași carte între piețe | public |
+
+Vinted, Kleinanzeigen și paginile eBay de vânzări finalizate nu au API și interzic scraping-ul, deci nu sunt incluse.
+
+## Pornire (o singură dată)
+
+1. **GitHub Pages:** Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+2. **eBay (recomandat):**
+   1. Fă cont gratuit pe [developer.ebay.com](https://developer.ebay.com) și creează un keyset **Production**.
+   2. La Alerts & Notifications → Marketplace Account Deletion alege „I do not persist eBay data” (exceptare), altfel cheile rămân blocate.
+   3. Copiază App ID (Client ID) și Cert ID (Client Secret).
+   4. În repo: Settings → Secrets and variables → Actions → New repository secret: `EBAY_CLIENT_ID` și `EBAY_CLIENT_SECRET`.
+3. **CardTrader (opțional):** pe cardtrader.com → Settings → API → copiază tokenul în secretul `CARDTRADER_TOKEN`.
+4. **Prima rulare:** Actions → „Detector Pokémon — actualizare zilnică” → Run workflow. După ~5 minute pagina are date.
+
+Fără chei, detectorul rulează doar cu Cardmarket și TCGplayer și arată pe pagină ce lipsește.
+
+## Ce rulează zilnic
+
+`detector.py` (doar biblioteca standard Python) descarcă sursele, potrivește cărțile prin ID-urile TCGdex, alege ~150 de candidați (scor mare sau momentum) pentru căutări eBay și CardTrader, scrie `docs/data/latest.json`, `docs/data/history.json` și salvează un instantaneu zilnic în `history/`. Graficele cresc zi de zi din acest istoric.
+
+Costuri de import folosite (UK și SUA → RO): TVA 21%, taxă vamală UE €3 pe colet ≤ €150 (din 1.07.2026), taxa logistică RO de 25 lei. Peste €150: 2,7% taxă vamală (neverificat în TARIC) și ~€15 brokeraj. Se schimbă în `detector.py`, sus.
+
+## Teste
+
+```bash
+python -m unittest discover -s tests -v
+node tests/page.test.js
+```
+
+Nu e sfat financiar. Verifică oferta (limbă, stare, vânzător) înainte să cumperi.

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Detector Pokémon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..100,500..900&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: market screener — status strip, lenses + filters, ranked table, card detail (side on wide screens, below otherwise). */
+:root {
+  --paper: #f3f5f8; --card: #ffffff; --ink: #141c26; --ink-2: #47525f; --muted: #6f7b88; --line: #dce1e7; --line-2: #eef1f4;
+  --accent: #3f3dc8; --accent-ink: #ffffff; --accent-soft: #e8e8fb;
+  --up: #17804a; --up-soft: #e3f3ea; --down: #bf3329; --down-soft: #fbe7e5; --warn: #9a6200; --warn-soft: #fbf0d9;
+  --s-cm: #2a78d6; --s-us: #eb6834; --s-eb: #6250d6;
+  --foil: conic-gradient(from 200deg, #7fd3ff, #c9a7ff, #ffb1d8, #ffe08a, #9df0c4, #7fd3ff);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0e131a; --card: #151c25; --ink: #e5eaf0; --ink-2: #a8b3bf; --muted: #7f8a96; --line: #263140; --line-2: #1b2430;
+  --accent: #9a98ff; --accent-ink: #0e131a; --accent-soft: #23264a;
+  --up: #4cc283; --up-soft: #16301f; --down: #f17a6f; --down-soft: #3a1c1a; --warn: #e3ac4c; --warn-soft: #36290f;
+  --s-cm: #3987e5; --s-us: #d95926; --s-eb: #9085e9;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0e131a; --card: #151c25; --ink: #e5eaf0; --ink-2: #a8b3bf; --muted: #7f8a96; --line: #263140; --line-2: #1b2430;
+  --accent: #9a98ff; --accent-ink: #0e131a; --accent-soft: #23264a;
+  --up: #4cc283; --up-soft: #16301f; --down: #f17a6f; --down-soft: #3a1c1a; --warn: #e3ac4c; --warn-soft: #36290f;
+  --s-cm: #3987e5; --s-us: #d95926; --s-eb: #9085e9;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--f-body) }
+[hidden] { display: none !important }
+img { max-width: 100% }
+.wrap { max-width: 1560px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 18px }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance }
+.num, td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+a { color: var(--accent) }
+button, input { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px }
+.brand { display: flex; align-items: center; gap: 14px }
+.slab { width: 34px; height: 46px; border-radius: 5px; background: var(--foil); box-shadow: inset 0 0 0 2px var(--card), 0 0 0 1px var(--line); flex: none }
+.brand h1 { font-size: 30px; font-stretch: 72%; font-weight: 850; letter-spacing: .01em; line-height: 1 }
+.brand p { margin: 4px 0 0; color: var(--ink-2); font-size: 14px }
+.srcs { display: flex; flex-wrap: wrap; gap: 6px }
+.src { font: 12px/1.2 var(--f-mono); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink-2); display: flex; gap: 6px; align-items: center }
+.src i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none }
+.src.ok i { background: var(--up) } .src.err i { background: var(--down) } .src.off i { background: var(--warn) }
+.src b { color: var(--ink); font-weight: 500 }
+
+.banner { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card) }
+.banner.err { background: var(--down-soft); border-color: color-mix(in srgb, var(--down) 35%, transparent) }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px }
+.stat span { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-family: var(--f-display); font-stretch: 85% }
+.stat b { font: 600 22px/1.2 var(--f-mono); font-variant-numeric: tabular-nums }
+
+.controls { display: grid; gap: 12px }
+.lenses { display: flex; flex-wrap: wrap; gap: 6px }
+.lens { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-stretch: 85%; font-weight: 600; font-size: 14px }
+.lens[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+.lens small { font-weight: 500; opacity: .75; margin-left: 4px; font-family: var(--f-mono) }
+.lens-note { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 85ch }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end }
+.f { display: grid; gap: 3px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-family: var(--f-display); font-stretch: 85% }
+.f input { text-transform: none; letter-spacing: 0; font: 14px var(--f-mono); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 92px }
+.f input[type=search] { width: 220px; font-family: var(--f-body) }
+.chk { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink-2); padding-bottom: 6px }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start }
+.tablebox { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 14px }
+th { text-align: left; font: 600 11px/1.2 var(--f-display); font-stretch: 85%; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--card) }
+th.n, td.n { text-align: right; white-space: nowrap }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line-2); vertical-align: middle }
+tbody tr { cursor: pointer }
+tbody tr:hover { background: var(--line-2) }
+tbody tr[aria-selected="true"] { background: var(--accent-soft) }
+td.rank { color: var(--muted); font-family: var(--f-mono); width: 28px }
+.cardcell { display: flex; gap: 10px; align-items: center; min-width: 220px }
+.thumb { width: 30px; height: 42px; border-radius: 3px; background: var(--line-2); flex: none; object-fit: cover }
+.cname { font-weight: 600; line-height: 1.25 }
+.cmeta { color: var(--muted); font-size: 12px }
+.mk { font: 500 11px/1 var(--f-mono); color: var(--muted); display: block; margin-top: 2px }
+.pos { color: var(--up) } .neg { color: var(--down) } .dim { color: var(--muted) }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 170px }
+.tag { font: 600 11px/1 var(--f-display); font-stretch: 85%; letter-spacing: .02em; padding: 4px 6px; border-radius: 4px; background: var(--line-2); color: var(--ink-2); white-space: nowrap }
+.tag.up { background: var(--up-soft); color: var(--up) } .tag.down { background: var(--down-soft); color: var(--down) }
+.tag.warn { background: var(--warn-soft); color: var(--warn) } .tag.acc { background: var(--accent-soft); color: var(--accent) }
+.scorebar { display: flex; align-items: center; gap: 6px }
+.scorebar i { display: block; height: 6px; border-radius: 3px; background: var(--line-2); width: 32px; overflow: hidden }
+.scorebar i b { display: block; height: 100%; background: var(--accent); border-radius: 3px }
+.empty { padding: 28px 16px; text-align: center; color: var(--ink-2) }
+.tfoot { padding: 10px 12px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line-2) }
+
+aside.detail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0 }
+.d-head { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: start }
+.d-head img { width: 84px; border-radius: 5px; background: var(--line-2); aspect-ratio: 245/337; object-fit: cover }
+.d-head h3 { font-size: 20px; font-stretch: 80%; line-height: 1.15 }
+.star { margin-top: 8px; border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 13px }
+.star[aria-pressed="true"] { background: var(--warn-soft); border-color: var(--warn); color: var(--warn) }
+.chart { position: relative }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); margin-top: 4px }
+.legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+.legend i { width: 14px; height: 2px; display: inline-block }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font: 12px/1.3 var(--f-mono); padding: 5px 7px; border-radius: 5px; transform: translate(-50%, -120%); white-space: nowrap; z-index: 2 }
+.mkt { width: 100%; border-collapse: collapse; font-size: 13.5px }
+.mkt th { padding: 6px 4px; background: none }
+.mkt td { padding: 6px 4px }
+.mkt td.n { font-family: var(--f-mono) }
+.mkt tr.best td { font-weight: 700 }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; margin: 0 }
+.kv dt { color: var(--ink-2) } .kv dd { margin: 0; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.kv .tot { border-top: 1px solid var(--line); padding-top: 4px; font-weight: 600; color: var(--ink) }
+.sect { font: 600 11px/1.2 var(--f-display); font-stretch: 85%; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 6px }
+.links { display: flex; flex-wrap: wrap; gap: 8px }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); font-size: 14px; background: var(--card) }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.note { font-size: 13px; color: var(--ink-2); margin: 0 }
+.sig { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px }
+.sig li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline }
+
+.method { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 10px }
+.method h2 { font-size: 20px; font-stretch: 80% }
+.method dl { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr); gap: 8px 18px; margin: 0; font-size: 14px }
+.method dt { font-weight: 700 } .method dd { margin: 0; color: var(--ink-2); max-width: 80ch }
+.method code { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink) }
+
+@media (max-width: 1439px) { .main { grid-template-columns: minmax(0, 1fr) } aside.detail { position: static } }
+@media (max-width: 760px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .method dl { grid-template-columns: minmax(0, 1fr) }
+  .f input[type=search] { width: 100% } .f.search { flex: 1 1 100% }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="slab" aria-hidden="true"></div>
+      <div>
+        <h1>Detector Pokémon</h1>
+        <p>Cardmarket, CardTrader, eBay UE/UK/SUA și TCGplayer, actualizat automat în fiecare dimineață.</p>
+      </div>
+    </div>
+    <div class="srcs" id="srcs" aria-live="polite"></div>
+  </header>
+
+  <div class="banner" id="status" role="status">Se încarcă prețurile de azi…</div>
+
+  <section class="stats" aria-label="Rezumat">
+    <div class="stat"><span>Cărți în filtru</span><b id="stCount">—</b></div>
+    <div class="stat"><span>Vândute în ultimele 24h</span><b id="stLiquid">—</b></div>
+    <div class="stat"><span>Momentum ≥ +10%</span><b id="stMom">—</b></div>
+    <div class="stat"><span>Cumpărare ≥ 25% ROI</span><b id="stFlip">—</b></div>
+  </section>
+
+  <section class="controls" aria-label="Filtre">
+    <div class="lenses" id="lenses" role="group" aria-label="Lentilă de analiză"></div>
+    <p class="lens-note" id="lensNote"></p>
+    <div class="filters">
+      <label class="f search">Caută carte, set sau număr<input type="search" id="q" placeholder="ex. Charizard, 151, 199/165"></label>
+      <label class="f">Preț min €<input type="number" id="pmin" value="30" min="0" step="5"></label>
+      <label class="f">Preț max €<input type="number" id="pmax" value="2000" min="0" step="50"></label>
+      <label class="f">Comision vânzare %<input type="number" id="fee" value="5" min="0" max="30" step="0.5"></label>
+      <label class="f">Transport UE €<input type="number" id="ship" value="3" min="0" step="0.5"></label>
+      <label class="chk"><input type="checkbox" id="rh" checked> Include Reverse Holo</label>
+      <label class="chk"><input type="checkbox" id="sus"> Arată ofertele suspecte</label>
+    </div>
+  </section>
+
+  <div class="main">
+    <section class="tablebox" aria-label="Clasament">
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Carte</th><th class="n">Trend CM</th><th class="n">Cea mai ieftină cumpărare</th><th>Curba</th>
+            <th class="n">30z→7z</th><th class="n">ROI net max</th><th class="n">SUA vs UE</th><th>Scor</th><th>Semnale</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty" hidden>Nicio carte nu trece filtrele. Lărgește intervalul de preț sau alege altă lentilă.</div>
+      <div class="tfoot" id="tfoot"></div>
+    </section>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <section class="method" aria-labelledby="mTitle">
+    <h2 id="mTitle">Cum citește detectorul piețele</h2>
+    <dl>
+      <dt>Actualizare</dt><dd>Un job GitHub Actions rulează în fiecare dimineață, citește sursele oficiale și publică datele pe această pagină. Nu trebuie să faci nimic.</dd>
+      <dt>Cardmarket (UE)</dt><dd>Ghidul public zilnic de prețuri: trend, cea mai ieftină ofertă și mediile vânzărilor pe 24h, 7 și 30 de zile. Piața de vânzare de referință.</dd>
+      <dt>CardTrader (UE)</dt><dd>Cea mai ieftină ofertă în engleză, Near Mint sau Mint, din API-ul oficial. Fără transport.</dd>
+      <dt>eBay DE, FR, IT, ES, UK, SUA</dt><dd>Anunțuri „Cumpără acum” prin API-ul oficial, verificate după numărul cărții, doar exemplare în engleză, fără gradate sau loturi. Prețul „adus în RO” include transportul spre România și, pentru UK și SUA, TVA de import 21%, taxa vamală de €3 și taxa de 25 lei (colete sub €150). Sunt prețuri cerute, nu vânzări.</dd>
+      <dt>TCGplayer (SUA)</dt><dd>Prețul de piață din copia publică zilnică tcgcsv.com, convertit la cursul BCE. Arată unde SUA plătește mai mult; vânzarea spre SUA are tarife și transport mare, deci e doar informativ.</dd>
+      <dt>ROI net max</dt><dd><code>(min(trend, medie 7z) × (1 − comision) − 1 €) ÷ cea mai ieftină cumpărare − 1</code>. Cumpărarea cea mai ieftină dintre Cardmarket, CardTrader și eBay. Cumpărările sub 25% din preț sunt „suspecte” și scoase din clasament.</dd>
+      <dt>Momentum și accelerare</dt><dd><code>medie 7z ÷ medie 30z − 1</code> și <code>medie 24h ÷ medie 7z − 1</code>, din vânzările reale de pe Cardmarket.</dd>
+      <dt>Scor general</dt><dd>0–100: 40 puncte ROI (saturat la 100%), 30 momentum (±40%), 15 accelerare (±30%), 15 lichiditate.</dd>
+      <dt>Limite</dt><dd>Prețul celei mai ieftine oferte Cardmarket include orice limbă și stare. eBay are doar prețuri cerute. Un semnal nu e o recomandare de cumpărare și nu e sfat financiar: deschide oferta înainte de bani.</dd>
+    </dl>
+  </section>
+</div>
+
+<script id="core">
+// Pure logic (tested in Node): scoring, routes, lenses.
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const pct = x => (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(0) + '%';
+const EB_NAMES = { EBAY_DE: 'eBay DE', EBAY_FR: 'eBay FR', EBAY_IT: 'eBay IT', EBAY_ES: 'eBay ES', EBAY_GB: 'eBay UK', EBAY_US: 'eBay SUA' };
+
+function fromCols(d) { return d.rows.map(a => Object.fromEntries(d.cols.map((c, i) => [c, a[i]]))) }
+
+function metrics(r, cfg) {
+  const liq = r.a1 != null ? 3 : r.a7 != null ? 2 : r.a30 != null ? 1 : 0;
+  const mom = r.a7 != null && r.a30 != null ? r.a7 / r.a30 - 1 : null;
+  const acc = r.a1 != null && r.a7 != null ? r.a1 / r.a7 - 1 : null;
+  const lag = r.a7 != null ? r.a7 / r.tr - 1 : null;
+  const ref = Math.min(r.tr, (r.kind === 'sealed' ? r.avg : r.a7) ?? r.tr);
+  const sellNet = ref * (1 - cfg.fee / 100) - 1;
+  const routes = [];
+  if (r.low != null) routes.push({ m: 'Cardmarket', buy: r.low + cfg.ship, note: 'oferta cea mai ieftină + transport' });
+  if (r.ct != null) routes.push({ m: 'CardTrader', buy: r.ct + cfg.ship, note: 'EN Near Mint + transport' });
+  if (r.eb) routes.push({ m: EB_NAMES[r.eb.m] || 'eBay', buy: r.eb.landed, url: r.eb.url, note: 'din ' + (r.eb.from || '?') + (r.eb.shipGuess ? ', transport estimat' : '') });
+  for (const x of routes) { x.roi = sellNet / x.buy - 1; x.suspect = x.buy < 0.25 * ref }
+  const ok = routes.filter(x => !x.suspect).sort((a, b) => a.buy - b.buy);
+  const best = ok[0] ?? null, roi = best ? best.roi : null, suspect = routes.length > 0 && !ok.length;
+  const us = r.us != null ? r.us / r.tr - 1 : null;
+  const score = clamp(40 * clamp(roi ?? 0, 0, 1) + 30 * clamp((mom ?? 0) / 0.4, -1, 1) + 15 * clamp((acc ?? 0) / 0.3, -1, 1) + 15 * liq / 3, 0, 100);
+  const sig = [];
+  if (r.kind === 'single') {
+    if (mom != null && mom >= 0.10 && liq >= 2) sig.push(['Momentum', 'up', 'Vânzările din ultima săptămână sunt cu ' + pct(mom) + ' peste media lunii.']);
+    if (acc != null && acc >= 0.10) sig.push(['Accelerează', 'up', 'Ultima zi s-a vândut cu ' + pct(acc) + ' peste media săptămânii.']);
+    if (lag != null && lag >= 0.10) sig.push(['Trend în urmă', 'acc', 'Media pe 7 zile e cu ' + pct(lag) + ' peste trend: ofertele ancorate în trend sunt ieftine.']);
+    if (mom != null && mom <= -0.15) sig.push(['Scade', 'down', 'Vânzările din ultima săptămână sunt cu ' + pct(-mom).slice(1) + ' sub media lunii.']);
+    if (liq <= 1) sig.push(['Ilichid', 'warn', 'Nicio vânzare pe Cardmarket în ultimele 7 zile.']);
+  }
+  if (best && roi >= 0.25) sig.push([best.m.startsWith('eBay') ? 'eBay ieftin' : best.m === 'CardTrader' ? 'CardTrader ieftin' : 'Flip ≥25%', 'up', 'Cumpărat pe ' + best.m + ' la ' + best.buy.toFixed(2) + ' € lasă ' + pct(roi) + ' ROI net vândut pe Cardmarket.']);
+  if (us != null && us >= 0.3) sig.push(['Prima SUA', 'acc', 'În SUA se plătește cu ' + pct(us) + ' mai mult (TCGplayer). Vânzarea spre SUA are tarife mari.']);
+  if (suspect) sig.push(['Ofertă suspectă', 'warn', 'Toate ofertele sunt sub 25% din preț: probabil altă limbă, stare slabă sau listare greșită.']);
+  return { liq, mom, acc, lag, ref, sellNet, routes, best, roi, suspect, us, score, sig };
+}
+
+const LENSES = {
+  score: { label: 'Scor general', kind: 'single', need: m => m.liq >= 2, by: m => m.score,
+    note: 'Combină marja de cumpărare, momentumul și lichiditatea. Punctul de plecare zilnic.' },
+  mom: { label: 'Momentum', kind: 'single', need: m => m.mom != null && m.liq >= 2, by: m => m.mom,
+    note: 'Cărțile care se vând săptămâna asta mai scump decât luna trecută pe Cardmarket. Semnalul cel mai solid: vine din vânzări, nu din oferte.' },
+  acc: { label: 'Accelerare', kind: 'single', need: m => m.acc != null, by: m => m.acc,
+    note: 'Ce a sărit în ultimele 24h față de media săptămânii. Devreme, dar zgomotos: confirmă cu momentumul.' },
+  buy: { label: 'Cumpără sub piață', kind: 'single', need: m => m.liq >= 2 && m.roi > 0, by: m => m.roi,
+    note: 'Cea mai ieftină cumpărare dintre Cardmarket, CardTrader și eBay (adusă în RO), comparată cu prețul la care se vinde pe Cardmarket.' },
+  us: { label: 'Prima SUA', kind: 'single', need: m => m.us != null && m.us > 0 && m.liq >= 2, by: m => m.us,
+    note: 'Unde TCGplayer (SUA) plătește mai mult decât Cardmarket. Ultima opțiune: vânzarea spre SUA are tarife și transport mare.' },
+  sealed: { label: 'Sigilate', kind: 'sealed', need: m => m.roi > 0, by: m => m.roi,
+    note: 'Produse sigilate listate sub trend pe Cardmarket. Fără medii pe 1/7/30 zile pentru sigilate.' },
+  watch: { label: 'Urmărite', kind: null, need: () => true, by: m => m.score, note: 'Cărțile marcate cu ★. Se păstrează în acest browser.' },
+};
+
+function rank(rows, lens, f, watch) {
+  const L = LENSES[lens], q = f.q.trim().toLowerCase();
+  return rows.filter(r =>
+    (L.kind ? r.kind === L.kind : true) && (lens !== 'watch' || watch.has(r.k)) &&
+    r.tr >= f.pmin && r.tr <= f.pmax && (f.rh || r.v !== 'Reverse Holo') &&
+    (f.sus || !r.m.suspect || lens === 'watch') && L.need(r.m) &&
+    (!q || (r.n + ' ' + r.s + ' ' + (r.no || '')).toLowerCase().includes(q))
+  ).sort((a, b) => L.by(b.m) - L.by(a.m));
+}
+</script>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtE = v => v == null ? '—' : v.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cls = x => x == null ? 'dim' : x >= 0 ? 'pos' : 'neg';
+const pctCell = x => x == null ? '—' : (x >= 0 ? '▲ ' : '▼ ') + Math.abs(x * 100).toFixed(1).replace('.', ',') + '%';
+const dayMs = 864e5, TOP = 150;
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch { return d } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch { } }
+
+const S = { rows: [], hist: { dates: [], s: {} }, data: null, lens: lsGet('dp.lens', 'score'), sel: null, watch: new Set(lsGet('dp.watch', [])) };
+if (!LENSES[S.lens]) S.lens = 'score';
+const filt = () => ({ q: $('q').value, pmin: +$('pmin').value || 0, pmax: +$('pmax').value || Infinity, fee: +$('fee').value || 0, ship: +$('ship').value || 0, rh: $('rh').checked, sus: $('sus').checked });
+
+async function load() {
+  try {
+    const [d, h] = await Promise.all([fetch('data/latest.json', { cache: 'no-cache' }), fetch('data/history.json', { cache: 'no-cache' })]);
+    if (!d.ok) throw new Error('latest ' + d.status);
+    S.data = await d.json();
+    S.rows = fromCols(S.data);
+    if (h.ok) S.hist = await h.json();
+    const at = new Date(S.data.generatedAt);
+    $('status').textContent = `Actualizat ${at.toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short' })}. Următoarea actualizare: mâine dimineață, automat.`;
+  } catch (e) {
+    $('status').className = 'banner err';
+    $('status').textContent = 'Datele nu sunt încă generate. Pornește o dată workflow-ul „Actualizare zilnică” din fila Actions a repo-ului, apoi reîncarcă pagina.';
+  }
+  render();
+}
+
+function recompute() { const f = filt(); for (const r of S.rows) r.m = metrics(r, f) }
+
+function renderSources() {
+  const src = S.data?.sources || {};
+  $('srcs').innerHTML = Object.entries(src).map(([k, v]) => {
+    const c = v.status === 'ok' ? 'ok' : v.status === 'eroare' ? 'err' : 'off';
+    const at = v.at ? String(v.at).slice(0, 10) : v.status;
+    return `<span class="src ${c}" title="${esc(v.note || '')}"><i aria-hidden="true"></i>${esc(k)} <b>${esc(v.status === 'ok' ? at : v.status)}</b></span>`;
+  }).join('');
+}
+
+function histOf(r) { return S.hist.s?.[r.k] }
+
+function spark(r) {
+  const h = histOf(r)?.cm?.filter(v => v != null);
+  let ys = h && h.length >= 3 ? h.slice(-30) : [r.a30, r.a7, r.a1, r.tr].filter(v => v != null);
+  if (ys.length < 2) return '<span class="dim">—</span>';
+  const W = 90, H = 26, lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || hi * 0.05 || 1;
+  const x = i => 3 + i / (ys.length - 1) * (W - 6), y = v => H - 3 - (v - lo) / span * (H - 6);
+  const d = ys.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+  const dir = ys[ys.length - 1] >= ys[0] ? 'var(--up)' : 'var(--down)';
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${h && h.length >= 3 ? 'Trend Cardmarket, ultimele zile' : 'Mediile Cardmarket pe 30 de zile'}"><path d="${d}" fill="none" stroke="var(--ink-2)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(ys.length - 1)}" cy="${y(ys[ys.length - 1])}" r="3" fill="${dir}"/></svg>`;
+}
+
+function renderLenses() {
+  const f = filt();
+  $('lenses').innerHTML = Object.entries(LENSES).map(([k, L]) =>
+    `<button class="lens" type="button" data-lens="${k}" aria-pressed="${k === S.lens}">${L.label}<small>${rank(S.rows, k, f, S.watch).length.toLocaleString('ro-RO')}</small></button>`).join('');
+  $('lensNote').textContent = LENSES[S.lens].note;
+}
+
+function renderStats() {
+  const f = filt(), base = S.rows.filter(r => r.kind === 'single' && r.tr >= f.pmin && r.tr <= f.pmax && (f.rh || r.v !== 'Reverse Holo'));
+  const n = x => x.toLocaleString('ro-RO');
+  $('stCount').textContent = n(base.length);
+  $('stLiquid').textContent = n(base.filter(r => r.m.liq === 3).length);
+  $('stMom').textContent = n(base.filter(r => r.m.mom != null && r.m.mom >= 0.1 && r.m.liq >= 2).length);
+  $('stFlip').textContent = n(base.filter(r => r.m.roi != null && r.m.roi >= 0.25 && r.m.liq >= 2).length);
+}
+
+const thumb = r => r.img ? `<img class="thumb" loading="lazy" alt="" onerror="this.style.visibility='hidden'" src="${esc(r.img.replace('/high.webp', '/low.webp'))}">` : '<span class="thumb" aria-hidden="true"></span>';
+
+function renderTable() {
+  const list = rank(S.rows, S.lens, filt(), S.watch), shown = list.slice(0, TOP);
+  $('rows').innerHTML = shown.map((r, i) => {
+    const m = r.m;
+    return `<tr tabindex="0" data-key="${r.k}" aria-selected="${S.sel === r.k}">
+      <td class="rank">${i + 1}</td>
+      <td><div class="cardcell">${thumb(r)}<div><div class="cname">${esc(r.n)}${S.watch.has(r.k) ? ' ★' : ''}</div><div class="cmeta">${esc(r.s)}${r.no ? ' · ' + esc(r.no) : ''} · ${r.v}</div></div></div></td>
+      <td class="n">${fmtE(r.tr)}</td>
+      <td class="n">${m.best ? fmtE(m.best.buy) + `<span class="mk">${esc(m.best.m)}</span>` : (m.suspect ? '<span class="dim">suspect</span>' : '—')}</td>
+      <td>${spark(r)}</td>
+      <td class="n ${cls(m.mom)}">${pctCell(m.mom)}</td>
+      <td class="n ${cls(m.roi)}">${pctCell(m.roi)}</td>
+      <td class="n ${cls(m.us)}">${pctCell(m.us)}</td>
+      <td><div class="scorebar"><i><b style="width:${m.score.toFixed(0)}%"></b></i><span class="num">${m.score.toFixed(0)}</span></div></td>
+      <td><div class="tags">${m.sig.map(s => `<span class="tag ${s[1]}">${s[0]}</span>`).join('')}</div></td>
+    </tr>`;
+  }).join('');
+  $('empty').hidden = shown.length > 0 || !S.data;
+  $('tfoot').textContent = !S.data ? '' : list.length > TOP ? `Primele ${TOP} din ${list.length.toLocaleString('ro-RO')}. Restrânge cu căutarea sau cu prețul.` : `${list.length.toLocaleString('ro-RO')} rezultate.`;
+  if (!S.sel || !list.some(r => r.k === S.sel)) S.sel = shown[0]?.k ?? null;
+  for (const tr of $('rows').children) tr.setAttribute('aria-selected', tr.dataset.key === S.sel);
+}
+
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const n = raw / p; return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p }
+
+function chart(r) {
+  if (r.kind === 'sealed') return '<p class="note">Cardmarket nu publică medii pe 24h/7/30 zile pentru sigilate. Istoricul zilnic apare aici după câteva zile de colectare.</p>';
+  const end = new Date(S.data.generatedAt), h = histOf(r) || {}, dates = (S.hist.dates || []).map(d => new Date(d + 'T06:00:00Z'));
+  const ago = d => (end - d) / dayMs;
+  const series = [
+    { key: 'cm', label: 'Trend Cardmarket', color: 'var(--s-cm)', dash: '' },
+    { key: 'us', label: 'TCGplayer SUA', color: 'var(--s-us)', dash: '5 4' },
+    { key: 'eb', label: 'eBay, adus în RO', color: 'var(--s-eb)', dash: '2 3' },
+  ].map(s => ({ ...s, pts: (h[s.key] || []).map((v, i) => v == null ? null : [ago(dates[i]), v]).filter(Boolean) }));
+  // today's values always shown, even before history exists
+  const today = { cm: r.tr, us: r.us, eb: r.eb?.landed };
+  for (const s of series) if (today[s.key] != null && !s.pts.some(p => p[0] < 0.6)) s.pts.push([0, today[s.key]]);
+  const avgs = [[15, r.a30, 'Medie vânzări 30 zile'], [3.5, r.a7, 'Medie vânzări 7 zile'], [0.5, r.a1, 'Medie vânzări 24h']].filter(p => p[1] != null);
+  const all = series.flatMap(s => s.pts).concat(avgs);
+  if (all.length < 2) return '<p class="note">Nu există încă destule puncte de preț pentru grafic.</p>';
+  const maxD = Math.max(30, ...all.map(p => Math.ceil(p[0])));
+  const W = 368, H = 210, L = 46, R = 10, T = 12, B = 28;
+  let lo = Math.min(...all.map(p => p[1])), hi = Math.max(...all.map(p => p[1])); const pad = (hi - lo || hi * 0.1) * 0.12; lo = Math.max(0, lo - pad); hi += pad;
+  const x = d => L + (maxD - d) / maxD * (W - L - R), y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const step = niceStep((hi - lo) / 4), ticks = []; for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+  const grid = ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-2)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="var(--f-mono)">${Math.round(v).toLocaleString('ro-RO')}</text>`).join('');
+  const xt = [...new Set([maxD, Math.round(maxD / 2), 7, 0])].map(d => `<text x="${x(d)}" y="${H - 9}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="var(--f-mono)">${d === 0 ? 'azi' : '−' + d + 'z'}</text>`).join('');
+  const tipFor = (label, v, d) => esc(`${label}: ${fmtE(v)}${d >= 1 ? ' (acum ' + Math.round(d) + ' z)' : ''}`);
+  const lines = series.filter(s => s.pts.length).map(s => {
+    const pts = s.pts.sort((a, b) => b[0] - a[0]);
+    const path = pts.length > 1 ? `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1)).join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''} stroke-linejoin="round" stroke-linecap="round"/>` : '';
+    const last = pts[pts.length - 1];
+    return path + pts.map(p => `<circle class="pt" cx="${x(p[0])}" cy="${y(p[1])}" r="${p === last ? 5 : 3}" fill="${s.color}" stroke="var(--card)" stroke-width="${p === last ? 2 : 0}" tabindex="${p === last ? 0 : -1}" data-tip="${tipFor(s.label, p[1], p[0])}"></circle>`).join('');
+  }).join('');
+  const avgDots = avgs.map(p => `<circle class="pt" cx="${x(p[0])}" cy="${y(p[1])}" r="5" fill="var(--card)" stroke="var(--s-cm)" stroke-width="2" tabindex="0" data-tip="${tipFor(p[2], p[1], 0)}"></circle>`).join('');
+  const legend = series.filter(s => s.pts.length).map(s => `<span><i style="background:${s.color}"></i>${s.label}</span>`).join('')
+    + (avgs.length ? '<span><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--s-cm)" stroke-width="2"/></svg>Medii vânzări Cardmarket</span>' : '');
+  return `<div class="chart" id="chartBox"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Prețul cărții pe piețe, ultimele ${maxD} zile, în euro">${grid}${xt}${lines}${avgDots}</svg><div class="tip" id="tip" hidden></div><div class="legend">${legend}</div></div>`;
+}
+
+function renderDetail() {
+  const r = S.rows.find(x => x.k === S.sel), box = $('detail');
+  if (!r) { box.innerHTML = '<p class="note">Alege o carte din tabel ca să-i vezi prețurile pe fiecare piață.</p>'; return }
+  const m = r.m, f = filt(), w = S.watch.has(r.k);
+  const q = encodeURIComponent(`${r.n} ${r.no || ''}`.trim());
+  const rowsM = m.routes.map(x => `<tr class="${x === m.best ? 'best' : ''}"><td>${esc(x.m)}<div class="cmeta">${esc(x.note)}</div></td><td class="n">${fmtE(x.buy)}</td><td class="n ${x.suspect ? 'dim' : cls(x.roi)}">${x.suspect ? 'suspect' : pctCell(x.roi)}</td></tr>`).join('');
+  const ebAsk = r.ebAsk != null ? `<tr><td>eBay, mediana celor mai ieftine ${r.ebN} anunțuri<div class="cmeta">preț cerut, fără transport</div></td><td class="n">${fmtE(r.ebAsk)}</td><td></td></tr>` : '';
+  const usRow = r.us != null ? `<tr><td>TCGplayer SUA<div class="cmeta">preț de piață, informativ</div></td><td class="n">${fmtE(r.us)}</td><td class="n ${cls(m.us)}">${pctCell(m.us)} vs UE</td></tr>` : '';
+  box.innerHTML = `
+    <div class="d-head">${r.img ? `<img src="${esc(r.img)}" alt="${esc(r.n)}" onerror="this.style.visibility='hidden'">` : '<span class="thumb" style="width:84px;height:116px"></span>'}
+      <div><h3>${esc(r.n)}</h3><div class="cmeta">${esc(r.s)}${r.no ? ' · ' + esc(r.no) : ''} · ${r.v}</div>
+      <button class="star" type="button" id="star" aria-pressed="${w}">${w ? '★ Urmărită' : '☆ Urmărește'}</button></div></div>
+    ${chart(r)}
+    <div><p class="sect">Unde cumperi (adus în RO) și ROI vândut pe Cardmarket</p>
+      <table class="mkt"><thead><tr><th>Piață</th><th class="n">Cost</th><th class="n">ROI net</th></tr></thead><tbody>${rowsM}${ebAsk}${usRow}</tbody></table></div>
+    <div><p class="sect">Cardmarket</p><dl class="kv">
+      ${r.kind === 'single' ? `<dt>Medie 30 zile</dt><dd>${fmtE(r.a30)}</dd><dt>Medie 7 zile</dt><dd>${fmtE(r.a7)}</dd><dt>Medie 24h</dt><dd>${fmtE(r.a1)}</dd>` : `<dt>Preț mediu</dt><dd>${fmtE(r.avg)}</dd>`}
+      <dt>Trend azi</dt><dd>${fmtE(r.tr)}</dd>
+      <dt>Vinzi la min(trend, medie 7z) − ${f.fee}% − 1 €</dt><dd class="tot">${fmtE(m.sellNet)}</dd>
+    </dl></div>
+    ${m.sig.length ? `<div><p class="sect">Semnale</p><ul class="sig">${m.sig.map(s => `<li><span class="tag ${s[1]}">${s[0]}</span><span>${s[2]}</span></li>`).join('')}</ul></div>` : ''}
+    <div class="links">
+      ${r.id ? `<a class="btn primary" href="https://www.cardmarket.com/en/Pokemon/Products?idProduct=${r.id}" target="_blank" rel="noopener">Cardmarket ↗</a>` : ''}
+      ${r.eb?.url ? `<a class="btn" href="${esc(r.eb.url)}" target="_blank" rel="noopener">Anunțul eBay ↗</a>` : ''}
+      <a class="btn" href="https://www.ebay.de/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">Vândute pe eBay ↗</a>
+    </div>
+    <p class="note">Verifică limba, starea și vânzătorul înainte să cumperi. ROI-ul e plafonul, nu garanția.</p>`;
+  $('star').onclick = () => { S.watch.has(r.k) ? S.watch.delete(r.k) : S.watch.add(r.k); lsSet('dp.watch', [...S.watch]); render() };
+  const cb = $('chartBox'), tip = $('tip');
+  if (cb) {
+    const show = e => { const c = e.target.closest('.pt'); if (!c) return; const b = cb.getBoundingClientRect(), p = c.getBoundingClientRect(); tip.textContent = c.dataset.tip; tip.hidden = false; const half = tip.offsetWidth / 2; tip.style.left = Math.min(Math.max(p.left + p.width / 2 - b.left, half), b.width - half) + 'px'; tip.style.top = (p.top - b.top) + 'px' };
+    const hide = () => { tip.hidden = true };
+    cb.addEventListener('mouseover', show); cb.addEventListener('focusin', show); cb.addEventListener('mouseout', hide); cb.addEventListener('focusout', hide);
+  }
+}
+
+function render() { recompute(); renderSources(); renderLenses(); renderStats(); renderTable(); renderDetail() }
+
+$('lenses').addEventListener('click', e => { const b = e.target.closest('[data-lens]'); if (!b) return; S.lens = b.dataset.lens; lsSet('dp.lens', S.lens); S.sel = null; render() });
+$('rows').addEventListener('click', e => {
+  const tr = e.target.closest('tr'); if (!tr) return; S.sel = tr.dataset.key;
+  for (const t of $('rows').children) t.setAttribute('aria-selected', t === tr);
+  renderDetail();
+  if (matchMedia('(max-width: 1439px)').matches) $('detail').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+});
+$('rows').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr')) { e.preventDefault(); e.target.click() } });
+for (const id of ['q', 'pmin', 'pmax', 'fee', 'ship', 'rh', 'sus']) $(id).addEventListener('input', render);
+load();
+</script>
+</body>
+</html>
