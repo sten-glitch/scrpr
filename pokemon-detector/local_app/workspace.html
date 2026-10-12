@@ -136,7 +136,7 @@ a.tablink:hover{background:#1d2c3d;text-decoration:none}
 
 <section id="radar" class="page">
 <div class="sectionheading"><div><p class="label">Signal discovery</p><h1>Market Radar</h1><p>Internal research signals from the existing BIGSTEN detector.</p></div>
-<button class="primary" id="refreshRadar">Import current feed ↓</button></div>
+<div class="btnrow"><button class="secondary" id="chooseLocalFeed">Import snapshot file</button><input type="file" id="localFeedFile" accept=".json,application/json" hidden><button class="primary" id="refreshRadar">Import current feed ↓</button></div></div>
 <div class="inline-note important">These rows compare a LOWEST ASKING PRICE with a 30-day guide price. They do not identify an executable deal, a sold comparison, liquidity or net resale profit. Commercial reuse of third-party data requires separate authorization.</div>
 <div id="feedStatus" class="subtitle" style="margin:15px 0">No feed imported.</div>
 <div class="card"><div class="card-title"><h2>Research candidates</h2><span id="radarCount">0 cards</span></div>
