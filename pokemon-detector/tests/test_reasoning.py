@@ -14,7 +14,9 @@ def card(price=100, confidence=0.95, sold=5):
                          "photo_confidence": confidence, "authenticity_confidence": confidence},
             "sold_comps": [{"identity_key": "sv03.5-199-en-holo-raw-nm", "language": "en", "condition": "NM",
                             "price_eur": price + i, "sold": True, "verified": True,
-                            "source_url": f"https://example.org/sold/{i}", "sold_at": "2026-10-10", "match_confidence": 0.97}
+                            "source_url": f"https://example.org/sold/{i}", "sold_at": "2026-10-10", "match_confidence": 0.97,
+                            "verification_method": "human_attestation", "reviewer": "fixture-reviewer",
+                            "proof_reference": f"synthetic-proof-{i}", "reviewed_at": "2026-10-11"}
                            for i in range(sold)]}
 
 def listing(items=None, kind="single", asking=45):
