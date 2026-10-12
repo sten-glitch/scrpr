@@ -27,6 +27,7 @@ import re
 import shutil
 import urllib.parse
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 SOURCES = {
@@ -248,6 +249,7 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
             raise PhotoSourceError("Target folder already contains files; refusing overwrite")
         dst.mkdir(parents=True, exist_ok=True)
     saved, failed = [], []
+    rate_limited = False
     for item in candidates:
         if len(saved) >= max_images:
             break
@@ -272,6 +274,11 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
         except (OSError, PhotoSourceError) as exc:
             failed.append({"source_page": item["source_page"],
                            "reason": str(exc)[:140]})
+            # Respect Wikimedia's rate limiting: do not hammer the same
+            # publisher repeatedly with more image requests after HTTP 429.
+            if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+                rate_limited = True
+                break
     meta = {
         "source": "Wikimedia Commons",
         "source_registry": SOURCES["commons"],
@@ -286,6 +293,7 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
         "identity_verified": False,
         "benchmark_ready": False,
         "dry_run": bool(dry_run),
+        "stopped_after_http_429":rate_limited,
         "items": saved, "failed": failed,
     }
     if not dry_run:
