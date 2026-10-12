@@ -29,6 +29,34 @@ A good match here does not demonstrate accuracy on real trading cards.
 Generated demo files remain inside the gitignored private folder, never
 committed to the repository. Re-running the generator refuses to overwrite.
 
+## Windows troubleshooting — WinError 32 during SQLite index creation
+
+A previous version of the index builder left an SQLite connection open
+when renaming a temporary index. Windows blocks renaming or deleting an open
+SQLite database. The fix explicitly closes both build and read connections.
+
+If demo_reference_lab.py previously failed with WinError 32 and left
+generated demo images/catalog/manifest but no demo_cards.sqlite, do not
+delete your personal private/ folder. Update the code on the feature branch:
+
+    git pull --ff-only origin feature/pokemon-deal-reasoning-v1
+
+Then, from the pokemon-detector directory:
+
+    .venv\Scripts\python.exe demo_reference_lab.py --resume
+
+The --resume option checks that existing geometric demo photos and JSON
+exactly match the generated demo. It never overwrites a different file or
+existing index. A leftover temporary .bigsten-index-*.sqlite file from a
+previous failure is not used; it can be inspected separately afterward.
+
+Start BIGSTEN after the index is created:
+
+    .venv\Scripts\python.exe local_app.py --port 8765 --catalog private/demo_catalog.json --reference-index private/demo_cards.sqlite
+
+The --resume option is intended ONLY for an interrupted generated demo,
+not for replacing or repairing an arbitrary user photo index.
+
 ## Preparation on Windows
 
 Download the branch feature/pokemon-deal-reasoning-v1 of sten-glitch/scrpr,
