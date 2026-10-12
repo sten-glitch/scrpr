@@ -30,7 +30,12 @@ def export_catalog(root: str | Path) -> list[dict]:
         setinfo = series.get((p.parent.parent.name, p.parent.name))
         if not setinfo:
             continue
-        name, rarity, variants = parse_card(p.read_text(encoding="utf-8"))
+        card_source = p.read_text(encoding="utf-8")
+        name, rarity, variants = parse_card(card_source)
+        # TCGdex parser may synthesize a reverse variant for older printings.
+        # A visual catalog must never invent an edition absent from source data.
+        if not re.search(r"\bvariants\s*:\s*\[", card_source):
+            variants = [(typ, ids) for typ, ids in variants if typ == "normal"]
         if not name or not variants:
             continue
         code, local = setinfo["id"], p.stem
