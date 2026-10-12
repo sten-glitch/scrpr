@@ -187,6 +187,23 @@
     unique.slice(0, 20).forEach((item) => appendText(questionsNode, "li", item));
   }
 
+  // Local-only health status: never expose photos, secret values or raw database paths.
+  fetch("/api/health", { cache: "no-store", credentials: "same-origin" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Health check unavailable");
+      return response.json();
+    })
+    .then((health) => {
+      const refs = Number(health.reference_photos || 0);
+      const cards = Number(health.catalog_items || 0);
+      byId("engineMode").textContent =
+        "Local Alpha · Catalog " + cards +
+        " · Visual refs " + (health.reference_index_loaded ? refs : "not configured");
+    })
+    .catch(() => {
+      byId("engineMode").textContent = "Local Alpha · Engine status unavailable";
+    });
+
   imagesInput.addEventListener("change", displayPreview);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
