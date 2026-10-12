@@ -19,6 +19,7 @@ from typing import Any
 from reasoning import evaluate_deal
 from photo_inputs import prepare_photo_inputs, PhotoInputError
 from inventory_review import review_inventory
+from listing_truth import evaluate_listing_truth
 
 KINDS = {"single", "graded", "lot", "binder", "sealed", "unknown"}
 FINISHES = {"normal", "holo", "reverse", "other", "unknown"}
@@ -52,6 +53,7 @@ JSON shape: {"kind":"single|graded|lot|binder|sealed|unknown",
 "language":"en|jp|de|fr|it|es|unknown","finish":"normal|holo|reverse|other|unknown",
 "condition":"NM|LP|MP|HP|DMG|sealed|unknown",
 "grade_company":"PSA|BGS|CGC or null","grade_number":"printed label text or null",
+"slab_visible":false,"edition":"first|unlimited|shadowless|unknown","edition_confidence":0.0,
 "identity_confidence":0.0,"condition_confidence":0.0,
 "photo_confidence":0.0,"flags":["back_not_visible"]}],
 "uncertainties":["text"]}.
@@ -188,6 +190,9 @@ def normalize_observation(raw: dict, image_count: int) -> dict:
         "number": label("number", 24), "language": language,
         "finish": finish, "condition": cond, "grade_company": grade,
         "grade_number": label("grade_number", 20),
+        "slab_visible": raw.get("slab_visible") if isinstance(raw.get("slab_visible"), bool) else None,
+        "edition": (label("edition", 16) or "unknown").lower() if (label("edition", 16) or "unknown").lower() in {"first", "unlimited", "shadowless", "unknown"} else "unknown",
+        "edition_confidence": _fraction(raw.get("edition_confidence")),
         "identity_confidence": _fraction(raw.get("identity_confidence")),
         "condition_confidence": _fraction(raw.get("condition_confidence")),
         "photo_confidence": _fraction(raw.get("photo_confidence")),
@@ -345,6 +350,14 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
     if review["groups_requiring_review"]:
         notes.append("Reconcile potentially duplicated/unidentified cards across photos")
     assessment = evaluate_deal(candidate, asof=asof)
+    resolutions = [
+        {"image_index": o["image_index"], "bbox_xyxy": o["bbox_xyxy"],
+         "identity_key": item["identity_key"]}
+        for o, item in zip(norm["observations"], candidate["items"])
+    ]
+    truth = evaluate_listing_truth(listing, norm, resolutions)
+    if truth["status"] in {"CONFLICT_DETECTED", "HIGH_RISK_REVIEW"}:
+        notes.append("Listing Truth Engine detected contradiction or risk; verify actual listing photos and item")
     return {
         "listing_id": str(listing.get("listing_id") or "")[:150],
         "listing_url": str(listing.get("listing_url") or "")[:1000],
@@ -352,11 +365,8 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
         "image_manifest": prepared["manifest"],
         "visual_evidence": norm,
         "inventory_review": review,
-        "catalog_resolutions": [
-            {"image_index": o["image_index"], "bbox_xyxy": o["bbox_xyxy"],
-             "identity_key": item["identity_key"]}
-            for o, item in zip(norm["observations"], candidate["items"])
-        ],
+        "catalog_resolutions": resolutions,
+        "listing_truth": truth,
         "assessment": assessment,
         "open_questions": list(dict.fromkeys(
             notes + [
