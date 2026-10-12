@@ -151,3 +151,55 @@ local_app.py — localhost-only web API
 local_app/index.html and app.js — browser interface
 tests/test_reference_matcher.py — synthetic pHash+ORB tests
 tests/test_local_cv_detection.py — synthetic binder-contour tests
+
+
+## Run an honest held-out retrieval benchmark
+
+Collect *different physical photographs* from your reference photos. Do not
+reuse, resize or copy the indexed reference photos as test input. Put them in
+private/evaluation-photos (private paths are excluded from public Git).
+
+Create private/reference-holdout.json, for example:
+
+    {
+      "cases": [
+        {
+          "case_id": "independent-positive-001",
+          "kind": "single",
+          "split": "holdout",
+          "image_file": "my-other-photo-001.jpg",
+          "expected_identity_key": "tcgdex:sv03.5-199-holo-en-raw",
+          "annotation_verified": true,
+          "annotation_reference": "my-physical-inspection-record-001"
+        },
+        {
+          "case_id": "independent-negative-001",
+          "kind": "negative",
+          "split": "holdout",
+          "image_file": "unrelated-item-photo.jpg",
+          "expected_identity_key": null,
+          "annotation_verified": true,
+          "annotation_reference": "my-inspection-record-002"
+        }
+      ]
+    }
+
+All example card references are illustrative. Enter the exact real identity
+only after examining the physical card/printing. Add separate cases for
+visually near-identical reverse/normal/holo variants. For a binder image,
+you may supply bbox_xyxy normalized crop coordinates to test one reviewed
+card in a page.
+
+Execute:
+
+    .venv\Scripts\python.exe reference_benchmark.py private/reference-holdout.json --index private/card_references.sqlite --query-root private/evaluation-photos --reference-manifest private/reference-manifest.json --reference-image-root private/reference-photos --out private/reference_accuracy.json
+
+Outputs known-card recall, wrong-identity rate, false-match rate on negatives,
+accepted-candidate precision and ABSTAIN / AMBIGUOUS frequency, with a separate
+category breakdown. A byte-identical reference/query image is rejected to
+reduce training/test leakage; this does not detect resized or rephotographed
+near-duplicates, so labeling and split discipline are still essential.
+
+The benchmark deliberately **does not** produce a certified success rate, a
+valuation accuracy claim, or an investment recommendation. Actual market
+performance requires authorized completed-sale and real resale outcome data.
