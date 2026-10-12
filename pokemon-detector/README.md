@@ -2,7 +2,7 @@
 
 Detector zilnic de oportunități pentru cărți Pokémon. Compară Cardmarket, CardTrader, eBay (DE, FR, IT, ES, UK, SUA) și TCGplayer (SUA), calculează prețul adus în România și clasează cărțile după momentum, marjă și lichiditate.
 
-Rulează singur în fiecare dimineață la 07:30 (ora României) prin GitHub Actions și publică rezultatul pe GitHub Pages: `https://sten-glitch.github.io/scrpr/`.
+Rulează singur în fiecare dimineață la 07:30 (ora României) prin GitHub Actions și publică rezultatul pe GitHub Pages (ramura `gh-pages`): `https://sten-glitch.github.io/scrpr/`.
 
 ## Surse (fără scraping)
 
@@ -18,7 +18,7 @@ Vinted, Kleinanzeigen și paginile eBay de vânzări finalizate nu au API și in
 
 ## Pornire (o singură dată)
 
-1. **GitHub Pages:** Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+1. **GitHub Pages:** site-ul se publică pe ramura `gh-pages`. Dacă pagina nu apare, Settings → Pages → Source: **Deploy from a branch** → `gh-pages` / root.
 2. **eBay (recomandat):**
    1. Fă cont gratuit pe [developer.ebay.com](https://developer.ebay.com) și creează un keyset **Production**.
    2. La Alerts & Notifications → Marketplace Account Deletion alege „I do not persist eBay data” (exceptare), altfel cheile rămân blocate.
