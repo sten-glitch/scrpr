@@ -340,6 +340,27 @@
     } catch (e) { feedback("Feed unavailable: "+e.message+". Your existing data is unchanged.",true); }
     finally { button.disabled=false; button.textContent="Import current feed ↓"; }
   });
+  $("chooseLocalFeed").addEventListener("click", () => $("localFeedFile").click());
+  $("localFeedFile").addEventListener("change", async () => {
+    const input = $("localFeedFile");
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 8 * 1024 * 1024) {
+        throw new Error("Local snapshot too large for browser import (8 MiB limit).");
+      }
+      const payload = JSON.parse(await file.text());
+      const result = await request("/api/workspace/radar/import-local", { snapshot: payload });
+      await reload();
+      feedback("Imported " + result.accepted + " internal guide-only research signals" +
+        (result.stale ? " (STALE snapshot)" : ""));
+    } catch (e) {
+      feedback("Snapshot import failed: " + e.message, true);
+    } finally {
+      input.value = "";
+    }
+  });
+
   $("scenarioForm").addEventListener("submit",async (event) => {
     event.preventDefault();
     if (!state.selectedId) return;
