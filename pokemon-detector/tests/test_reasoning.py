@@ -18,7 +18,7 @@ def card(price=100, confidence=0.95, sold=5):
                            for i in range(sold)]}
 
 def listing(items=None, kind="single", asking=45):
-    return {"kind": kind, "asking_eur": asking, "currency": "EUR", "items": items if items is not None else [card()],
+    return {"kind": kind, "asking_eur": asking, "currency": "EUR", "costs_verified": True, "items": items if items is not None else [card()],
             "acquisition": {"shipping_eur": 5, "taxes_eur": 2},
             "sale": {"marketplace_fee_pct": 12, "outbound_shipping_eur": 4, "packaging_eur": 1}}
 
@@ -70,6 +70,13 @@ class TestReasoning(unittest.TestCase):
         r = evaluate_deal(listing([i]), asof=DAY)
         self.assertEqual(r["items"][0]["sold_comps_count"], 1)
         self.assertEqual(r["decision"], "REVIEW")
+
+    def test_unverified_costs_cannot_trigger_buy(self):
+        data = listing()
+        data.pop("costs_verified")
+        r = evaluate_deal(data, asof=DAY)
+        self.assertEqual(r["decision"], "REVIEW")
+        self.assertLessEqual(r["score"], 59)
 
     def test_invalid_money_rejected(self):
         with self.assertRaises(ValueError):
