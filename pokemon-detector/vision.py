@@ -109,7 +109,10 @@ def call_vision_api(listing: dict) -> dict:
 
     No server-side scraper and no extra secrets are sent. Expects JSON output.
     """
-    prepared = prepare_photo_inputs(listing, encode_local=True)
+    try:
+        prepared = prepare_photo_inputs(listing, encode_local=True)
+    except PhotoInputError as exc:
+        raise VisionError(str(exc)) from exc
     endpoint = _api_endpoint()
     key = os.environ.get("VISION_API_KEY", "")
     if not key and urllib.parse.urlsplit(endpoint).hostname not in {"localhost", "127.0.0.1", "::1"}:
@@ -326,7 +329,10 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
     """Full observable pipeline. Model output always remains provisional."""
     if not isinstance(listing, dict):
         raise VisionError("listing must be a JSON object")
-    prepared = prepare_photo_inputs(listing)
+    try:
+        prepared = prepare_photo_inputs(listing)
+    except PhotoInputError as exc:
+        raise VisionError(str(exc)) from exc
     raw = observation if observation is not None else call_vision_api(listing)
     norm = normalize_analysis(raw, prepared["image_count"])
     candidate, notes = provisional_listing(listing, norm, catalog)
