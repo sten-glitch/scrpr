@@ -27,4 +27,5 @@ jobs:
         run: |
           node pokemon-detector/tests/page.test.js
           node --check pokemon-detector/local_app/app.js
+          node --check pokemon-detector/photo_review/app.js
           node --check pokemon-detector/local_app/workspace.js
