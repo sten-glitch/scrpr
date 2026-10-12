@@ -1,0 +1,11 @@
+# Optional FREE offline image recognition. The localhost app works without these.
+# Install only in a Python virtual environment on your own machine:
+#   python -m pip install -r requirements-local.txt
+# You also need the separate system Tesseract binary for printed-text OCR.
+#
+# These packages are runtime dependencies; do not confuse source-code
+# licenses with the rights to redistribute card art or marketplace photos.
+opencv-python-headless>=4.8,<6
+numpy>=1.24,<3
+Pillow>=10.0,<13
+pytesseract>=0.3,<1
