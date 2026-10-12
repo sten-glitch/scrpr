@@ -11,7 +11,15 @@ import json
 from collections import Counter, defaultdict
 from typing import Any
 
-from vision_benchmark import intersection_over_union
+def intersection_over_union(a, b):
+    """Minimal unit-square IoU with no dependency on the benchmark or vision."""
+    width = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    height = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    intersection = width * height
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    union = area_a + area_b - intersection
+    return intersection / union if union else 0.0
 
 IDENTITY_FIELDS = ("name", "set", "number", "language", "finish", "grade_company", "grade_number")
 
