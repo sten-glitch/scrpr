@@ -12,6 +12,11 @@ echo This is NOT a verified Pokemon card identity dataset.
 echo.
 echo Photos stay in private\web-research\commons\, ignored by GitHub.
 echo.
+echo Step 1: Public Roboflow previews (three example photos, no account)
+py -3 external_photo_sources.py previews
+if errorlevel 1 echo Preview import was unavailable or folder already existed.
+echo.
+echo Step 2: Wikimedia Commons per-file license-reviewed photographs
 py -3 external_photo_sources.py commons --max-images 12
 if errorlevel 1 (
   echo.
