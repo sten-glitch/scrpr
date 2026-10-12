@@ -10,6 +10,25 @@ verified card printing, foil, exact variant, authentic physical item, PSA slab,
 condition or resale value. Similar art across rare/normal/reverse prints can
 look nearly identical; those require manual examination.
 
+## 60-second synthetic demo (no Pokémon card art)
+
+If you only want to SEE the pHash + ORB engine before collecting lawful card
+reference photos, install the optional packages once and run:
+
+    .venv\Scripts\python.exe demo_reference_lab.py
+    .venv\Scripts\python.exe local_app.py --port 8765 --catalog private/demo_catalog.json --reference-index private/demo_cards.sqlite
+
+Open http://127.0.0.1:8765, choose "Single card", enter any title and a
+positive placeholder EUR price, then upload:
+
+    private/demo_queries/demo_query_A.png
+
+The local application will show the visual match candidate. These are
+machine-generated geometric test patterns, NOT genuine Pokémon cards.
+A good match here does not demonstrate accuracy on real trading cards.
+Generated demo files remain inside the gitignored private folder, never
+committed to the repository. Re-running the generator refuses to overwrite.
+
 ## Preparation on Windows
 
 Download the branch feature/pokemon-deal-reasoning-v1 of sten-glitch/scrpr,
