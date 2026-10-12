@@ -18,7 +18,10 @@ import re
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
+
+from workspace import WorkspaceStore, WorkspaceError
+from workspace_api import workspace_get, workspace_post
 
 from listing_truth import evaluate_listing_truth
 from local_cv import combine_local_observations, LocalCVError
@@ -158,9 +161,11 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None,
 class AlphaServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
-    def __init__(self, port: int, catalog: list[dict], matcher: ReferenceMatcher | None = None):
+    def __init__(self, port: int, catalog: list[dict], matcher: ReferenceMatcher | None = None,
+                 workspace_path="private/bigsten_workspace.sqlite"):
         self.catalog = catalog
         self.matcher = matcher
+        self.workspace = WorkspaceStore(workspace_path)
         super().__init__(("127.0.0.1",port), AlphaHandler)
 
 
@@ -205,17 +210,30 @@ class AlphaHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._valid_origin():
             return self._json(403,{"error":"Only localhost access is permitted"})
-        if self.path in ("/","/index.html"):
+        uri = urlsplit(self.path)
+        if uri.path in ("/", "/workspace", "/workspace.html"):
+            path=STATIC_DIR/"workspace.html"
+            ctype="text/html; charset=utf-8"
+        elif uri.path in ("/analyze", "/index.html"):
             path=STATIC_DIR/"index.html"
             ctype="text/html; charset=utf-8"
-        elif self.path=="/app.js":
+        elif uri.path=="/workspace.js":
+            path=STATIC_DIR/"workspace.js"
+            ctype="application/javascript; charset=utf-8"
+        elif uri.path=="/app.js":
             path=STATIC_DIR/"app.js"
             ctype="application/javascript; charset=utf-8"
-        elif self.path=="/api/health":
+        elif uri.path=="/api/health":
             return self._json(200,{"status":"local_alpha","public_deployment_allowed":False,
                                    "catalog_items":len(self.server.catalog),
                                    "reference_index_loaded":self.server.matcher is not None,
                                    "reference_photos":self.server.matcher.reference_count if self.server.matcher else 0})
+        elif uri.path.startswith("/api/workspace/"):
+            try:
+                code, payload=workspace_get(self.server.workspace,uri.path,parse_qs(uri.query))
+                return self._json(code,payload)
+            except (WorkspaceError,ValueError) as exc:
+                return self._json(422,{"error":str(exc)[:400]})
         else:
             return self._json(404,{"error":"Not found"})
         try:
@@ -227,7 +245,8 @@ class AlphaHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._valid_origin():
             return self._json(403,{"error":"Only localhost access is permitted"})
-        if self.path!="/api/analyze":
+        endpoint=urlsplit(self.path).path
+        if endpoint!="/api/analyze" and not endpoint.startswith("/api/workspace/"):
             return self._json(404,{"error":"Not found"})
         if self.headers.get("Content-Type","").split(";")[0].strip().lower()!="application/json":
             return self._json(415,{"error":"application/json required"})
@@ -239,9 +258,14 @@ class AlphaHandler(BaseHTTPRequestHandler):
             return self._json(413,{"error":"Request too large or empty"})
         try:
             payload=json.loads(self.rfile.read(length))
-            out=analyze_request(payload,self.server.catalog,self.server.matcher)
-            return self._json(200,out)
-        except (AlphaInputError,VisionError,ValueError,TypeError) as exc:
+            if endpoint=="/api/analyze":
+                out=analyze_request(payload,self.server.catalog,self.server.matcher)
+                return self._json(200,out)
+            code,body=workspace_post(self.server.workspace,endpoint,payload,
+                                     analyze_listing=analyze_request,
+                                     catalog=self.server.catalog,matcher=self.server.matcher)
+            return self._json(code,body)
+        except (AlphaInputError,VisionError,WorkspaceError,ValueError,TypeError) as exc:
             return self._json(422,{"error":str(exc)[:400]})
         except Exception:
             return self._json(500,{"error":"Analysis failed without a financial conclusion"})
@@ -259,6 +283,8 @@ def main(argv=None):
     parser.add_argument("--port",type=int,default=8765)
     parser.add_argument("--catalog",help="Optional TCGdex catalog JSON; loaded locally")
     parser.add_argument("--reference-index",help="Optional private user-owned pHash/ORB SQLite index")
+    parser.add_argument("--workspace-db",default="private/bigsten_workspace.sqlite",
+                        help="Local-only persistent SQLite workspace (inside gitignored private folder)")
     args=parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
         parser.error("Allowed local port range: 1024–65535")
@@ -268,8 +294,9 @@ def main(argv=None):
         if not isinstance(catalog,list):
             parser.error("Catalog must be JSON array")
     matcher=ReferenceMatcher(args.reference_index) if args.reference_index else None
-    server=AlphaServer(args.port,catalog,matcher)
-    print(f"BIGSTEN local alpha: http://127.0.0.1:{args.port} (PRIVATE, no login — never expose publicly)")
+    server=AlphaServer(args.port,catalog,matcher,workspace_path=args.workspace_db)
+    print(f"BIGSTEN Workbench: http://127.0.0.1:{args.port} — local database at {server.workspace.path}")
+    print(f"Photo lab: http://127.0.0.1:{args.port}/analyze (PRIVATE, never expose publicly)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
