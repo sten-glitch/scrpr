@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from public_photo_audit import run_public_photo_audit, audit_html, PublicAuditError
+from public_photo_audit import run_public_photo_audit, audit_html, PublicAuditError, title_only_review_hint
 
 
 def fake_commons(*, max_images, root, search):
@@ -86,6 +86,27 @@ class TestPublicPhotoAudit(unittest.TestCase):
         self.assertEqual(report["summary"]["download_or_analysis_failures"],1)
         self.assertEqual(report["status"],
                          "REAL_PUBLIC_UNLABELED_PHOTO_RESEARCH_NOT_AN_ACCURACY_BENCHMARK")
+
+    def test_research_review_hints_are_not_human_verified_labels(self):
+        self.assertEqual(
+            title_only_review_hint("commons","Pokemon Trading Card Game QR Code.jpg"),
+            "POTENTIAL_HARD_NEGATIVE_TITLE_ONLY")
+        self.assertEqual(
+            title_only_review_hint("commons","Nintendo Switch game card.jpg"),
+            "POTENTIAL_HARD_NEGATIVE_TITLE_ONLY")
+        self.assertEqual(
+            title_only_review_hint("commons","Pokemon collection.jpg"),
+            "LIKELY_CARD_SUBJECT_TITLE_ONLY")
+        self.assertEqual(
+            title_only_review_hint("roboflow_preview","photo_02.jpg"),
+            "PROVIDER_PREVIEW_REQUIRES_HUMAN_REVIEW")
+        report=run_public_photo_audit(
+            commons=20,previews=True,
+            commons_import=fake_commons,preview_import=fake_previews,
+            image_analysis=self.scan)
+        self.assertFalse(report["cases"][0]["review_hint_is_ground_truth"])
+        self.assertIn("title_only_review_hint",report["cases"][0])
+        self.assertEqual(report["summary"]["title_suspected_negatives_with_rectangles"],0)
 
     def test_html_rejects_fabricated_accuracy_reports(self):
         with self.assertRaises(PublicAuditError):
