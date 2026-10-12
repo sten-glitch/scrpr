@@ -12,7 +12,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from external_photo_sources import (
     SOURCES, PhotoSourceError, _allowed_commons_license,
     _public_commons_image_url, discover_commons, import_commons,
-    download_roboflow,
+    download_roboflow, import_roboflow_public_previews,
 )
 
 PHOTO_PAYLOAD={
@@ -96,6 +96,39 @@ class TestExternalPhotoSources(unittest.TestCase):
             with patch("external_photo_sources._request_json",return_value=PHOTO_PAYLOAD):
                 with self.assertRaisesRegex(PhotoSourceError,"refusing overwrite"):
                     import_commons(10,dest,dry_run=False)
+
+    def test_public_example_thumbnails_can_be_researched_without_api_key(self):
+        class FakeHTTP:
+            def __init__(self,request):
+                self.status=200
+                self.url=request.full_url
+                self.headers={"Content-Type":"image/jpeg"}
+            def read(self,size):
+                return b"\xff\xd8\xffSYNTHETIC_RESEARCH_PREVIEW\xff\xd9"
+            def geturl(self):
+                return self.url
+            def __enter__(self):
+                return self
+            def __exit__(self,*args):
+                pass
+        with tempfile.TemporaryDirectory() as temp:
+            dest=Path(temp)/"private"
+            with patch("external_photo_sources.urllib.request.urlopen",
+                       side_effect=lambda request,timeout: FakeHTTP(request)) as opened:
+                out=import_roboflow_public_previews(dest)
+            self.assertEqual(len(out["items"]),3)
+            self.assertEqual(opened.call_count,3)
+            self.assertTrue((dest/"SOURCE_ATTRIBUTION.json").is_file())
+            self.assertFalse(out["benchmark_ready"])
+            self.assertFalse(out["commercial_rights_cleared"])
+            self.assertTrue(all(not record["exact_card_identity_verified"]
+                                for record in out["items"]))
+            with self.assertRaisesRegex(PhotoSourceError,"refusing overwrite"):
+                import_roboflow_public_previews(dest)
+        with patch("external_photo_sources.urllib.request.urlopen") as opened:
+            out=import_roboflow_public_previews(dry_run=True)
+            self.assertEqual(len(out["items"]),3)
+            opened.assert_not_called()
 
     def test_roboflow_requires_environment_key_without_side_effects(self):
         with patch.dict(os.environ,{"ROBOFLOW_API_KEY":""}):
