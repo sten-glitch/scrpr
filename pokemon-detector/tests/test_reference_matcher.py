@@ -91,6 +91,14 @@ class TestReferenceMatcher(unittest.TestCase):
         self.assertEqual(res["candidates"][0]["phash_distance"],0)
         self.assertGreaterEqual(res["candidates"][0]["orb_good_matches"],8)
 
+    def test_single_card_full_frame_reference_fallback_is_only_candidate(self):
+        image=self.make_reference("single.png",seed=23)
+        matcher=self.build(manifest(("ref_one","demo:variant-A","single.png")))
+        output=matcher.match_entire_photo(image_bytes(image))
+        self.assertEqual(output["status"],"VISUAL_CANDIDATE")
+        self.assertEqual(output["matched_identity_key"],"demo:variant-A")
+        self.assertEqual(output["candidates"][0]["status"],"CANDIDATE_NOT_VERIFIED")
+
     def test_duplicate_art_in_distinct_variants_must_abstain(self):
         self.make_reference("a.png",seed=3)
         self.make_reference("b.png",seed=3)
