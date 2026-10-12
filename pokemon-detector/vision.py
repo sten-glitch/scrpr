@@ -18,6 +18,7 @@ from typing import Any
 
 from reasoning import evaluate_deal
 from photo_inputs import prepare_photo_inputs, PhotoInputError
+from inventory_review import review_inventory
 
 KINDS = {"single", "graded", "lot", "binder", "sealed", "unknown"}
 FINISHES = {"normal", "holo", "reverse", "other", "unknown"}
@@ -253,6 +254,7 @@ def resolve_catalog_id(o: dict, catalog: list[dict]) -> tuple[str | None, str]:
         c for c in catalog if
         _norm(c.get("set")) == _norm(o["set"]) and
         _number(c.get("number")) == _number(o["number"]) and
+        (not c.get("name") or not o.get("name") or _norm(c.get("name")) == _norm(o.get("name"))) and
         (c.get("language") or "").lower() == o["language"] and
         (c.get("finish") or "").lower() == o["finish"]
         and isinstance(c.get("identity_key"), str) and c.get("identity_key")
@@ -336,6 +338,12 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
     raw = observation if observation is not None else call_vision_api(listing)
     norm = normalize_analysis(raw, prepared["image_count"])
     candidate, notes = provisional_listing(listing, norm, catalog)
+    review = review_inventory(
+        norm["observations"],
+        [i["identity_key"] for i in candidate["items"][:len(norm["observations"])]],
+    )
+    if review["groups_requiring_review"]:
+        notes.append("Reconcile potentially duplicated/unidentified cards across photos")
     assessment = evaluate_deal(candidate, asof=asof)
     return {
         "listing_id": str(listing.get("listing_id") or "")[:150],
@@ -343,6 +351,7 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
         "image_urls": listing.get("image_urls") or [],
         "image_manifest": prepared["manifest"],
         "visual_evidence": norm,
+        "inventory_review": review,
         "catalog_resolutions": [
             {"image_index": o["image_index"], "bbox_xyxy": o["bbox_xyxy"],
              "identity_key": item["identity_key"]}
