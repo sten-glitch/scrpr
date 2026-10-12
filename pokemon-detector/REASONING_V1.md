@@ -9,6 +9,8 @@ Standalone deterministic decision engine intended for integration with `sten-gli
 - Produces `BUY_CANDIDATE`, `REVIEW` or `REJECT` plus confidence, diagnostics and evidence links. It does not automatically buy.
 - Excludes unpriced lot components from projected resale; refuses to estimate full ROI when priced coverage <90% (or <100% for singles/sealed).
 
+A BUY_CANDIDATE additionally requires explicit `costs_verified: true` from a trusted cost-validation adapter; omitted costs are not considered verified. This flag must never come from an unreviewed language-model guess.
+
 ## What it cannot do yet
 It does **not** connect to marketplaces, retrieve sold listings, scan images, confirm condition, authenticate cards, infer missing items in binder images, or validate import taxes. These must be built upstream. `BUY_CANDIDATE` means human review is still mandatory.
 
