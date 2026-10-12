@@ -14,6 +14,8 @@
 > [Offline Photo Lab](OFFLINE_PHOTO_LAB.md) ·
 > [Sales Evidence Lab](SALES_EVIDENCE_LAB.md).
 >
+> **NEW internet datasets:** [Public Pokémon image sources + safe import](WEB_IMAGE_DATASETS.md) — Wikimedia Commons direct research download, Roboflow official dataset export (account/API permission may be required), YOLO card-box benchmark, private holdout sampling. No dataset images are committed to GitHub.
+>
 > **NEW P1:** [Private Photo Ground Truth Lab](PHOTO_REVIEW_LAB.md) — run
 > `start-photo-lab.bat` on Windows after placing permissioned photos into
 > `private/evaluation-photos`. Label card regions, exact printing and negative
