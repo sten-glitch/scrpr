@@ -116,6 +116,23 @@ class TestYOLODetectionBenchmark(unittest.TestCase):
         self.assertEqual(x["metrics"]["true_positives"],1)
         self.assertEqual(x["class_names"][0],"background")
 
+    def test_segmentation_polygon_to_box_is_only_geometry(self):
+        boxes=_parse_boxes("0 0.20 0.20 0.80 0.20 0.80 0.90 0.20 0.90",0)
+        self.assertEqual(len(boxes),1)
+        self.assertAlmostEqual(boxes[0][0],.2)
+        self.assertAlmostEqual(boxes[0][3],.9)
+        with self.assertRaises(DetectionBenchmarkError):
+            _parse_boxes("0 0.20 0.20 0.80 0.20 0.80 1.5",0)
+
+    def test_scanner_polygon_source_reports_segmentation_as_box(self):
+        self.add("segmented_card","0 0.25 0.25 0.75 0.25 0.75 0.75 0.25 0.75")
+        with patch("external_detection_benchmark.detect_card_boxes",
+                   return_value=[[.25,.25,.75,.75]]):
+            result=benchmark_yolo(self.root,source="scanner")
+        self.assertTrue(result["segmentation_polygons_evaluated_as_boxes"])
+        self.assertEqual(result["metrics"]["true_positives"],1)
+        self.assertFalse(result["card_identity_accuracy_measured"])
+
     def test_html_does_not_render_untrusted_source_name_as_markup(self):
         self.add("safephoto","")
         with patch("external_detection_benchmark.detect_card_boxes",return_value=[]):
