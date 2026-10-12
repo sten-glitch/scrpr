@@ -235,6 +235,17 @@ def resolve_catalog_id(o: dict, catalog: list[dict]) -> tuple[str | None, str]:
     """Strict identity resolution, no name-only matches and no graded/raw mixups."""
     if o["grade_company"]:
         return None, "Graded slab: independently verify grading label/serial and graded comps"
+    if o["condition"] == "sealed":
+        if not o["name"]:
+            return None, "Missing exact sealed product identity"
+        sealed = [c for c in catalog if c.get("kind") == "sealed"
+                  and _norm(c.get("name")) == _norm(o["name"])
+                  and (not o["set"] or _norm(c.get("set")) == _norm(o["set"]))
+                  and isinstance(c.get("identity_key"), str) and c.get("identity_key")]
+        unique = {c["identity_key"] for c in sealed}
+        if len(unique) == 1:
+            return next(iter(unique)), "Exact sealed catalog name; packaging and seal require verification"
+        return None, "Ambiguous sealed products" if sealed else "No exact sealed catalog product"
     if not o["set"] or not o["number"] or o["language"] == "unknown" or o["finish"] == "unknown":
         return None, "Missing set/number/language/finish for exact catalog match"
     matches = [
