@@ -21,6 +21,7 @@ from pathlib import Path
 
 from reference_matcher import ReferenceMatcher, ReferenceMatchError, _safe_reference
 from local_cv import _checked_image
+from dataset_review import _iou
 
 
 class ReferenceBenchmarkError(ValueError):
@@ -76,7 +77,12 @@ def audit_references(matcher: ReferenceMatcher, test_data: dict,
     if not 1<=len(cases)<=500:
         raise ReferenceBenchmarkError("Expected 1..500 held-out cases")
     ref_hashes=_load_manifest_hashes(reference_manifest,reference_image_root)
-    seen_ids,seen_query_hashes=set(),set()
+    seen_ids,seen_query_regions=set(),defaultdict(list)
+    real_photo_digests=set()
+    synthetic_photo_digests=set()
+    unknown_origin_digests=set()
+    seen_kinds=set()
+    indexed_identities = {row[1] for row in getattr(matcher,"records",[])} if hasattr(matcher,"records") else None
     row_results=[]
     counts=defaultdict(int)
     by_kind=defaultdict(lambda:defaultdict(int))
@@ -104,6 +110,8 @@ def audit_references(matcher: ReferenceMatcher, test_data: dict,
             raise ReferenceBenchmarkError("expected_identity_key must be exact text or null")
         if kind=="negative" and expected is not None:
             raise ReferenceBenchmarkError("Negative case cannot have a known positive identity")
+        if expected is not None and indexed_identities is not None and expected not in indexed_identities:
+            raise ReferenceBenchmarkError("Positive ground-truth identity is missing from the reference index; classify as negative if out of scope")
         path=_safe_reference(Path(query_root),record.get("image_file"))
         if path.stat().st_size>5*1024*1024:
             raise ReferenceBenchmarkError("Query photo exceeds 5 MiB")
@@ -113,10 +121,25 @@ def audit_references(matcher: ReferenceMatcher, test_data: dict,
             raise ReferenceBenchmarkError(
                 f"Reference leakage: {case_id} is byte-identical to an indexed reference"
             )
-        if digest in seen_query_hashes:
-            raise ReferenceBenchmarkError("Repeated query image would inflate test sample")
-        seen_query_hashes.add(digest)
-        result=_evaluate_photo(matcher,raw,record.get("bbox_xyxy"))
+        # Labeling multiple DIFFERENT card boxes in one binder photo is valid.
+        # Repeated full-frame samples or overlapping boxes inflate metrics.
+        box=record.get("bbox_xyxy")
+        prior=seen_query_regions[digest]
+        if prior and (box is None or any(p is None or _iou(p,box)>.80 for p in prior)):
+            raise ReferenceBenchmarkError("Repeated query region would inflate test sample")
+        prior.append(box)
+        provided_hash=record.get("photo_sha256")
+        if provided_hash is not None and provided_hash!=digest:
+            raise ReferenceBenchmarkError("Photo bytes changed after annotation (photo_sha256 mismatch)")
+        origin=record.get("photo_origin","unknown")
+        if origin=="real_photo":
+            real_photo_digests.add(digest)
+        elif origin=="synthetic_demo":
+            synthetic_photo_digests.add(digest)
+        else:
+            unknown_origin_digests.add(digest)
+        seen_kinds.add(kind)
+        result=_evaluate_photo(matcher,raw,box)
         status=result.get("status")
         if status not in {"ABSTAIN","AMBIGUOUS","VISUAL_CANDIDATE"}:
             raise ReferenceBenchmarkError("Unexpected matcher status")
@@ -170,12 +193,28 @@ def audit_references(matcher: ReferenceMatcher, test_data: dict,
     return {
         "status":"HUMAN_ATTESTED_HELDOUT_REFERENCE_BENCHMARK",
         "evaluated_at":dt.datetime.now(dt.timezone.utc).isoformat(),
-        "metrics":metrics(counts),
+        "metrics":{**metrics(counts),
+                   "distinct_test_photos":len(seen_query_regions),
+                   "distinct_real_photos":len(real_photo_digests),
+                   "distinct_synthetic_photos":len(synthetic_photo_digests),
+                   "distinct_unclassified_photos":len(unknown_origin_digests)},
+        "pilot_sample_gate":{
+            "fifty_distinct_real_photos":len(real_photo_digests)>=50,
+            "at_least_five_negative_cases":counts["negative_cases"]>=5,
+            "at_least_three_evaluation_categories":len(seen_kinds)>=3,
+            "all_photo_origins_reviewed":len(unknown_origin_digests)==0,
+            "accuracy_certified":False,
+            "status":"SAMPLE_READY_FOR_MANUAL_REVIEW" if (
+                len(real_photo_digests)>=50 and counts["negative_cases"]>=5
+                and len(seen_kinds)>=3 and not unknown_origin_digests
+            ) else "INSUFFICIENT_REAL_PHOTO_VALIDATION",
+        },
         "by_kind":{k:metrics(v) for k,v in sorted(by_kind.items())},
         "cases":row_results,
         "limitations":[
             "Independent handwritten labels are human attestations, not guaranteed truth",
-            "Byte-exact train/test duplicates are rejected; resized/near-duplicate leakage still needs human review",
+            "Byte-exact train/test duplicates and overlapping same-photo regions are rejected; resized/near-duplicate leakage still needs human review",
+            "Self-reported real-photo provenance is not independently verified; 50 real photos is a sampling gate, not a product-grade accuracy certification",
             "A high image match does not prove foil, authenticity, grade, stamp or original card identity",
             "This dataset may be biased and cannot support population-wide accuracy claims without representative sampling",
             "No financial outcome or resale performance is measured by this benchmark",
