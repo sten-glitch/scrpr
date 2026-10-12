@@ -1,0 +1,54 @@
+name: BIGSTEN public photo research audit (unlabeled)
+
+# Opt-in through changes to this isolated research workflow/script; it does
+# NOT run on each product commit or create recurring network traffic.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/bigsten-public-photo-audit.yml'
+      - 'pokemon-detector/public_photo_audit.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline CV dependencies
+        run: python -m pip install -r pokemon-detector/requirements-local.txt
+      - name: Public photo audit (ephemeral photos, no paid provider)
+        working-directory: pokemon-detector
+        run: |
+          python public_photo_audit.py --commons 30 --search "pokemon cards" --previews --out private/public_photo_audit
+      - name: Explain research metrics
+        working-directory: pokemon-detector
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path("private/public_photo_audit.json").read_text(encoding="utf8"))
+          print("Photos successfully processed:",x["summary"]["real_public_photos_processed"])
+          print("Provisional rectangle detections:",x["summary"]["provisional_rectangles"])
+          print("Failed downloads or scans:",x["summary"]["download_or_analysis_failures"])
+          print("Independent card bounding-box precision:",x["summary"]["card_box_precision"])
+          print("Actual exact Pokémon printing accuracy:",x["summary"]["real_photo_card_identity_accuracy"])
+          assert x["summary"]["real_photo_card_identity_accuracy"] is None
+          assert x["summary"]["card_box_precision"] is None
+          assert not any("image_base64" in str(c) for c in x["cases"])
+          PY
+      - name: Upload metadata-only research reports (NO image bytes)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bigsten-public-photo-audit
+          path: |
+            pokemon-detector/private/public_photo_audit.json
+            pokemon-detector/private/public_photo_audit.html
+          if-no-files-found: error
+          retention-days: 7
