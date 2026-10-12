@@ -133,7 +133,8 @@ class TestSalesEvidence(unittest.TestCase):
 
     def test_rejects_malformed_or_unbounded_csv(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = write_csv(tmp, [record()], headers=("source",))
+            path = Path(tmp) / "sales.csv"
+            path.write_text("source\nmanual\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 import_sales(path, asof=DAY)
             path = Path(tmp) / "sales.csv"
