@@ -6,6 +6,24 @@ Build BIGSTEN Collection Intelligence as an independent commercial SaaS. Initial
 
 Core promise: upload a card, binder or listing; BIGSTEN shows what is actually visible, what the seller claims, contradictions, uncertain item identity/condition/quantity, and only evidence-backed valuation. Never advertise guaranteed profitability or automatic authentication/PSA grades. No automated purchasing.
 
+## Implementation status — 12 October 2026
+
+**P0 built:** localhost web alpha, seller-claim checks, provisional local OCR
+and contour detection, TCGdex metadata suggestions, photo review, offline
+evidence/reasoning and private reports.
+
+**P1 engineering started:** user-authorized private pHash + ORB image-reference
+index, candidate matching from detected rectangles, full-frame single-card
+fallback, explicit AMBIGUOUS / ABSTAIN results, synthetic offline demo and a
+human-attested held-out retrieval benchmark that rejects byte-identical
+train/test photos.
+
+**Not accomplished:** no representative real trading-card dataset yet, no
+reported real-world visual precision, no provider-approved commercial price
+feed, no hosted accounts/billing/privacy protections, and no verified
+profitable investment strategy. P1 is NOT complete until independent photo
+accuracy and licensed-data gates pass. Current GitHub PR remains draft.
+
 ## Delivery roadmap and release gates
 
 | Phase | Planning window | Shippable outcome | Gate |
