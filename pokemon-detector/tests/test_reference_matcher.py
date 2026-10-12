@@ -5,11 +5,13 @@ job. All reference images here are programmatically created test patterns
 and never downloaded from Pokémon artwork websites.
 """
 import json
+import os
 import sqlite3
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -81,6 +83,40 @@ class TestReferenceMatcher(unittest.TestCase):
         stats=build_reference_index(spec,self.root/"photos",output,CATALOG)
         self.assertFalse(stats["rights_verified_by_software"])
         return ReferenceMatcher(output)
+
+    def test_sqlite_handle_closed_before_rename_and_after_ro_read(self):
+        """Windows WinError 32 regression: context manager alone isn't close()."""
+        self.make_reference("close_me.png", seed=31)
+        open_handles=[]
+        real_connect=sqlite3.connect
+        real_replace=os.replace
+
+        class CheckedConnection(sqlite3.Connection):
+            explicitly_closed=False
+            def close(self):
+                self.explicitly_closed=True
+                return super().close()
+
+        def connect(*args,**kwargs):
+            obj=real_connect(*args,factory=CheckedConnection,**kwargs)
+            open_handles.append(obj)
+            return obj
+
+        def rename_only_if_closed(src,dst):
+            self.assertTrue(open_handles)
+            self.assertTrue(all(c.explicitly_closed for c in open_handles),
+                            "SQLite temp handle still open before os.replace")
+            return real_replace(src,dst)
+
+        with patch("reference_matcher.sqlite3.connect",side_effect=connect), \
+             patch("reference_matcher.os.replace",side_effect=rename_only_if_closed):
+            matcher=self.build(manifest(("ref_win","demo:variant-A","close_me.png")))
+        self.assertGreaterEqual(len(open_handles),2)
+        self.assertTrue(all(c.explicitly_closed for c in open_handles))
+        self.assertEqual(matcher.reference_count,1)
+        # On Windows a live SQLite handle would also block unlink after read.
+        (self.root/"private"/"cards.sqlite").unlink()
+        self.assertFalse((self.root/"private"/"cards.sqlite").exists())
 
     def test_good_reference_photo_has_visual_candidate(self):
         img=self.make_reference()
