@@ -110,7 +110,7 @@ def _parse_boxes(text: str, class_id: int) -> list[list[float]]:
             xc,yc,w,h=(x0+x1)/2,(y0+y1)/2,x1-x0,y1-y0
         else:
             xc,yc,w,h=coords
-        if (not all(math.isfinite(z) for z in xywh)
+        if (not all(math.isfinite(z) for z in (xc,yc,w,h))
                 or w<=0 or h<=0 or w>1 or h>1
                 or not 0<=xc<=1 or not 0<=yc<=1
                 or xc-w/2 < -1e-3 or yc-h/2 < -1e-3
