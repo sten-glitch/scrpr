@@ -108,7 +108,11 @@ Install optional free vision dependencies for the **benchmark**:
 
 Now execute (the full command can be put on one line):
 
-    .venv\Scripts\python.exe reference_benchmark.py private/reference-holdout.json --index private/card_references.sqlite --query-root private/evaluation-photos --reference-manifest private/reference-manifest.json --reference-image-root private/reference-photos --out private/reference_accuracy.json
+    .venv\Scripts\python.exe reference_benchmark.py private/reference-holdout.json --index private/card_references.sqlite --query-root private/evaluation-photos --reference-manifest private/reference-manifest.json --reference-image-root private/reference-photos --out private/reference_accuracy.json --html private/reference_accuracy.html
+
+Open private/reference_accuracy.html in your browser after the benchmark
+finishes. The report has offline cards, breakdowns and a case-by-case mistake
+list. It does not load scripts or download any external images.
 
 Results include:
 - known-card recall, wrong identity rate and candidate precision
