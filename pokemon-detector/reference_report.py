@@ -82,9 +82,14 @@ def render_benchmark_report(report: dict) -> str:
     if certified:
         raise BenchmarkReportError("Untrusted input claims unsupported certified accuracy")
     status = str(pilot.get("status") or "INSUFFICIENT_REAL_PHOTO_VALIDATION")
+    gates_pass = (real_photos >= 50 and negatives >= 5
+                  and pilot.get("at_least_three_evaluation_categories") is True
+                  and pilot.get("all_photo_origins_reviewed") is True
+                  and pilot.get("fifty_distinct_real_photos") is True
+                  and pilot.get("at_least_five_negative_cases") is True)
     headline = (
         "Minimum sampling gate reached — not an accuracy certification"
-        if status == "SAMPLE_READY_FOR_MANUAL_REVIEW"
+        if status == "SAMPLE_READY_FOR_MANUAL_REVIEW" and gates_pass
         else "Real-photo validation is incomplete"
     )
     stats=[
