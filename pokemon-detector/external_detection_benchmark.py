@@ -94,14 +94,22 @@ def _parse_boxes(text: str, class_id: int) -> list[list[float]]:
         if not line.strip():
             continue
         pieces=line.strip().split()
-        if len(pieces)!=5:
-            raise DetectionBenchmarkError("Expected YOLO detection label: class xc yc w h")
+        if len(pieces)!=5 and (len(pieces)<7 or len(pieces)%2!=1):
+            raise DetectionBenchmarkError("Expected YOLO class + xywh or polygon x/y points")
         try:
             cls=int(pieces[0])
-            xywh=[float(x) for x in pieces[1:]]
+            coords=[float(x) for x in pieces[1:]]
         except ValueError as exc:
             raise DetectionBenchmarkError("Malformed numeric annotation") from exc
-        xc,yc,w,h=xywh
+        if len(pieces)>5:
+            if not all(math.isfinite(z) and 0<=z<=1 for z in coords):
+                raise DetectionBenchmarkError("Invalid YOLO segmentation polygon")
+            xs=coords[0::2]
+            ys=coords[1::2]
+            x0,y0,x1,y1=min(xs),min(ys),max(xs),max(ys)
+            xc,yc,w,h=(x0+x1)/2,(y0+y1)/2,x1-x0,y1-y0
+        else:
+            xc,yc,w,h=coords
         if (not all(math.isfinite(z) for z in xywh)
                 or w<=0 or h<=0 or w>1 or h>1
                 or not 0<=xc<=1 or not 0<=yc<=1
@@ -160,7 +168,7 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
                    max_images=400, max_cards=30, iou_threshold=.5,
                    source="detector") -> dict:
     root=Path(root).expanduser().resolve()
-    if source not in ("detector","binder"):
+    if source not in ("detector","binder","scanner"):
         raise DetectionBenchmarkError("Unknown registered dataset source")
     if split not in ("test","valid"):
         raise DetectionBenchmarkError("Do not use train split for validation")
@@ -247,6 +255,7 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
         "real_photo_provenance_human_verified":False,
         "human_exact_card_id_labels":False,"commercial_rights_cleared":False,
         "card_identity_accuracy_measured":False,
+        "segmentation_polygons_evaluated_as_boxes":source=="scanner",
         "limitations":[
             "Only box detection, NOT card identity, edition, foil, rarity, slab grade or authenticity",
             "Externally contributed labels may be noisy/incorrect; no human audit performed by BIGSTEN",
@@ -297,7 +306,7 @@ def main(argv=None):
     p=argparse.ArgumentParser(description="Benchmark BIGSTEN offline OpenCV card rectangles on Roboflow YOLO exports")
     p.add_argument("dataset", help="Local official YOLOv8 export directory (with data.yaml)")
     p.add_argument("--split",choices=["test","valid"],default="test")
-    p.add_argument("--source",choices=["detector","binder"],required=True)
+    p.add_argument("--source",choices=["detector","binder","scanner"],required=True)
     p.add_argument("--card-class-id",type=int,help="Override verified card class ID from data.yaml")
     p.add_argument("--max-images",type=int,default=400)
     p.add_argument("--iou",type=float,default=.5)
