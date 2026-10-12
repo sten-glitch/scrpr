@@ -9,7 +9,7 @@ Sources, all official or public feeds (no scraping):
   IDs TCGdex cards-database (GitHub, MIT): links one card across all markets
 Writes <out>/latest.json, <out>/history.json and <history>/<YYYY-MM-DD>.json.
 """
-import argparse, base64, datetime as dt, gzip, json, os, re, statistics, sys, time
+import argparse, base64, datetime as dt, gzip, json, math, os, re, statistics, sys, time
 import urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -237,10 +237,11 @@ def metrics(r, fee=5.0, ship=3.0):
     acc = r['a1'] / r['a7'] - 1 if r['a1'] and r['a7'] else None
     ref = min(r['tr'], r['a7'] or r['tr'])
     roi = (ref * (1 - fee / 100) - 1) / (r['low'] + ship) - 1 if r['low'] else None
-    suspect = bool(r['low'] and r['low'] < 0.25 * ref)
+    suspect = bool(r['low'] and r['low'] + ship < 0.5 * ref)  # Cardmarket's lowest offer can be any condition
     clamp = lambda x, a, b: max(a, min(b, x))
-    score = clamp(40 * (0 if suspect else clamp(roi or 0, 0, 1)) + 30 * clamp((mom or 0) / 0.4, -1, 1)
-                  + 15 * clamp((acc or 0) / 0.3, -1, 1) + 15 * liq / 3, 0, 100)
+    sat = lambda x, k: 1 - math.exp(-x / k) if x > 0 else clamp(x / k, -1, 0)
+    score = clamp(40 * (0 if suspect else max(0, sat(roi or 0, 0.5))) + 30 * (sat(mom, 0.3) if mom is not None and mom <= 1.5 else 0)
+                  + 15 * (sat(acc, 0.3) if acc is not None and acc <= 1.5 else 0) + 15 * liq / 3, 0, 100)
     return {'liq': liq, 'mom': mom, 'acc': acc, 'ref': ref, 'roi': roi, 'suspect': suspect, 'score': score}
 
 

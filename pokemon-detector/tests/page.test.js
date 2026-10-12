@@ -25,7 +25,7 @@ assert.ok(m.sig.some(s => s[0] === 'eBay ieftin') && m.sig.some(s => s[0] === 'P
 assert.equal(rows[1].m.suspect, true);       // only route at 8 € vs ref 40 €
 assert.equal(rows[1].m.best, null);
 
-const f = { q: '', pmin: 1, pmax: 2000, rh: true, sus: false };
+const f = { q: '', pmin: 1, pmax: 2000, rh: true, sus: false, idonly: true };
 assert.deepEqual(rank(rows, 'buy', f, new Set()).map(r => r.k), ['1']);
 assert.deepEqual(rank(rows, 'us', f, new Set()).map(r => r.k), ['1']);
 assert.deepEqual(rank(rows, 'sealed', f, new Set()).map(r => r.k), ['3']);
@@ -37,4 +37,8 @@ odd.m = metrics(odd, cfg);
 assert.ok(odd.m.suspect && odd.m.sig.some(s => s[0] === 'Preț divergent') && odd.m.sig.some(s => s[0] === 'Salt extrem'));
 assert.deepEqual(rank([odd], 'mom', f, new Set()).length, 0);
 assert.deepEqual(rank([odd], 'mom', { ...f, sus: true }, new Set()).length, 1);
+const noNum = fromCols({ cols, rows: [['8', 'single', 'Gengar Lv.44', 'Advent of Arceus', null, 'Normal', 70, 60, 73, 80, 75, 70, null, null, null]] })[0];
+noNum.m = metrics(noNum, cfg);
+assert.equal(rank([noNum], 'score', f, new Set()).length, 0);
+assert.equal(rank([noNum], 'score', { ...f, idonly: false }, new Set()).length, 1);
 console.log('page core ok');
