@@ -29,3 +29,48 @@ jobs:
           node --check pokemon-detector/local_app/app.js
           node --check pokemon-detector/photo_review/app.js
           node --check pokemon-detector/local_app/workspace.js
+
+      - name: ONE-TIME public image research smoke (no artifacts or customer data)
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          python - <<'PY'
+          import sys, tempfile, urllib.request
+          from pathlib import Path
+          sys.path.insert(0, "pokemon-detector")
+          from external_photo_sources import import_commons
+          from local_cv import analyze_local_photo
+          count = 0
+          detections = 0
+          with tempfile.TemporaryDirectory(prefix="bigsten-web-smoke-") as private:
+              try:
+                  report = import_commons(4, private)
+                  print("commons_photo_downloaded",len(report["items"]))
+                  for item in report["items"]:
+                      raw = (Path(private)/item["image_file"]).read_bytes()
+                      result = analyze_local_photo(raw, run_ocr=False)
+                      count += 1
+                      detections += len(result["observations"])
+              except Exception as exc:
+                  print("Commons source unavailable, no bypass:", type(exc).__name__, str(exc)[:120])
+              examples = [
+                  "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/08xJWiqOpJif2IzGrR7f/thumb.jpg",
+                  "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0B8uOnE24QytHZReG4oC/thumb.jpg",
+                  "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0DaJGzfqRmLZn4LyuMy8/thumb.jpg",
+              ]
+              for link in examples:
+                  try:
+                      req = urllib.request.Request(link, headers={"User-Agent":"BIGSTEN Local Photo Research"})
+                      with urllib.request.urlopen(req, timeout=12) as resp:
+                          if resp.status != 200 or "image/" not in resp.headers.get("Content-Type",""):
+                              continue
+                          binary = resp.read(1024*1024)
+                      result = analyze_local_photo(binary,run_ocr=False)
+                      count += 1
+                      detections += len(result["observations"])
+                  except Exception as exc:
+                      print("Public preview unavailable:", type(exc).__name__, str(exc)[:100])
+          print("REAL_UNLABELED_WEB_PHOTOS_PROCESSED",count)
+          print("PROVISIONAL_CARD_LIKE_RECTANGLES",detections)
+          print("NO exact identity labels; NO identity accuracy claim; NO photos stored as artifacts")
+          PY
