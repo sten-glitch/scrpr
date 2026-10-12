@@ -10,6 +10,7 @@ Does NOT import/use Viridian code or third-party reference artwork.
 """
 from __future__ import annotations
 
+from contextlib import closing
 import argparse
 import datetime as dt
 import json
@@ -174,7 +175,9 @@ def build_reference_index(manifest: dict, image_root: str | Path,
     fd, tmpfile = tempfile.mkstemp(prefix=".bigsten-index-", suffix=".sqlite", dir=str(target.parent))
     os.close(fd)
     try:
-        with sqlite3.connect(tmpfile) as db:
+        # sqlite3.Connection.__exit__ COMMITs/ROLLBACKs but DOES NOT CLOSE.
+        # Windows forbids os.replace/os.remove while the SQLite file is open.
+        with closing(sqlite3.connect(tmpfile)) as db:
             db.execute("CREATE TABLE reference_features (reference_id TEXT PRIMARY KEY, identity_key TEXT NOT NULL, phash TEXT NOT NULL, orb BLOB, rights_basis TEXT NOT NULL, permission_reference TEXT NOT NULL)")
             db.execute("CREATE INDEX ref_by_identity ON reference_features(identity_key)")
             db.executemany("INSERT INTO reference_features VALUES (?,?,?,?,?,?)", entries)
@@ -209,7 +212,9 @@ class ReferenceMatcher:
         # mode=ro guarantees image-matching cannot mutate reviewed records.
         uri = path.as_uri() + "?mode=ro"
         try:
-            with sqlite3.connect(uri, uri=True) as db:
+            # Explicit close is also required for Windows file handles when
+            # the read-only index is rebuilt or removed later.
+            with closing(sqlite3.connect(uri, uri=True)) as db:
                 meta = dict(db.execute("SELECT key,value FROM metadata"))
                 if meta.get("schema_version") != "1":
                     raise ReferenceMatchError("Unsupported reference index schema")
