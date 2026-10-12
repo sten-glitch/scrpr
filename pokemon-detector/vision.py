@@ -17,6 +17,7 @@ import urllib.request
 from typing import Any
 
 from reasoning import evaluate_deal
+from photo_inputs import prepare_photo_inputs, PhotoInputError
 
 KINDS = {"single", "graded", "lot", "binder", "sealed", "unknown"}
 FINISHES = {"normal", "holo", "reverse", "other", "unknown"}
@@ -108,10 +109,7 @@ def call_vision_api(listing: dict) -> dict:
 
     No server-side scraper and no extra secrets are sent. Expects JSON output.
     """
-    images = listing.get("image_urls") or []
-    if not isinstance(images, list) or not 1 <= len(images) <= MAX_IMAGES:
-        raise VisionError(f"1..{MAX_IMAGES} image_urls required")
-    urls = [validate_image_url(url) for url in images]
+    prepared = prepare_photo_inputs(listing, encode_local=True)
     endpoint = _api_endpoint()
     key = os.environ.get("VISION_API_KEY", "")
     if not key and urllib.parse.urlsplit(endpoint).hostname not in {"localhost", "127.0.0.1", "::1"}:
@@ -120,9 +118,9 @@ def call_vision_api(listing: dict) -> dict:
         "title": str(listing.get("title") or "")[:500],
         "description": str(listing.get("description") or "")[:1500],
         "kind_hint": str(listing.get("kind_hint") or "")[:30],
-        "image_count": len(urls),
+        "image_count": prepared["image_count"],
     }, ensure_ascii=False)}]
-    msg += [{"type": "image_url", "image_url": {"url": url, "detail": "high"}} for url in urls]
+    msg += prepared["image_messages"]
     request_body = {
         "model": os.environ.get("VISION_MODEL", "gpt-4.1-mini"),
         "temperature": 0,
@@ -133,7 +131,7 @@ def call_vision_api(listing: dict) -> dict:
         ],
     }
     data = json.dumps(request_body).encode()
-    if len(data) > 80000:
+    if len(data) > 24 * 1024 * 1024:
         raise VisionError("Vision request too large")
     headers = {"Content-Type": "application/json", "User-Agent": "bigsten-pokemon-vision/2"}
     if key:
@@ -328,19 +326,16 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
     """Full observable pipeline. Model output always remains provisional."""
     if not isinstance(listing, dict):
         raise VisionError("listing must be a JSON object")
-    images = listing.get("image_urls")
-    if not isinstance(images, list) or not 1 <= len(images) <= MAX_IMAGES:
-        raise VisionError("Expected 1..8 image URLs")
-    for url in images:
-        validate_image_url(url)
+    prepared = prepare_photo_inputs(listing)
     raw = observation if observation is not None else call_vision_api(listing)
-    norm = normalize_analysis(raw, len(images))
+    norm = normalize_analysis(raw, prepared["image_count"])
     candidate, notes = provisional_listing(listing, norm, catalog)
     assessment = evaluate_deal(candidate, asof=asof)
     return {
         "listing_id": str(listing.get("listing_id") or "")[:150],
         "listing_url": str(listing.get("listing_url") or "")[:1000],
-        "image_urls": images,
+        "image_urls": listing.get("image_urls") or [],
+        "image_manifest": prepared["manifest"],
         "visual_evidence": norm,
         "catalog_resolutions": [
             {"image_index": o["image_index"], "bbox_xyxy": o["bbox_xyxy"],
@@ -360,7 +355,7 @@ def analyze_listing(listing: dict, catalog: list[dict], *, observation: dict | N
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Inspect a Pokémon marketplace listing (never auto-buy)")
-    p.add_argument("listing", help="Marketplace listing JSON with image_urls and asking_eur")
+    p.add_argument("listing", help="Listing JSON with image_urls OR image_files and asking_eur")
     p.add_argument("--catalog", help="Optional trusted exact-identity catalog JSON array")
     p.add_argument("--observation", help="Offline cached vision JSON (no API call)")
     p.add_argument("--out", help="Write result to JSON file instead of stdout")
