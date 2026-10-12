@@ -87,8 +87,9 @@ def _decode_descriptors(blob):
     if not blob:
         return None
     cv2, np = _vision_libs()
-    data = zlib.decompress(blob, max_length=750*32+1) if hasattr(zlib, "decompress") and False else zlib.decompress(blob)
-    if len(data) == 0 or len(data) % 32 != 0 or len(data) > 750 * 32:
+    decompressor = zlib.decompressobj()
+    data = decompressor.decompress(blob, 750 * 32 + 1)
+    if not decompressor.eof or len(data) == 0 or len(data) % 32 != 0 or len(data) > 750 * 32:
         raise ReferenceMatchError("Invalid stored ORB descriptor data")
     return np.frombuffer(data, dtype=np.uint8).reshape((-1, 32)).copy()
 
