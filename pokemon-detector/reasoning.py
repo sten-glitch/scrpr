@@ -9,7 +9,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
-from statistics import median
 from typing import Any
 
 KINDS = {"single", "lot", "binder", "sealed"}
@@ -47,7 +46,7 @@ def _comps(item: dict, asof: dt.date, max_age_days: int = 90) -> list[dict]:
     for c in item.get("sold_comps", []):
         if not c.get("sold") or not c.get("verified") or not c.get("source_url"):
             continue
-        if not ident or c.get("identity_key") != ident:
+        if not ident or not item.get("language") or not item.get("condition") or c.get("identity_key") != ident:
             continue
         if c.get("language") != item.get("language") or c.get("condition") != item.get("condition"):
             continue
@@ -156,6 +155,9 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
     elif roi < min_roi:
         decision = "REJECT" if roi < 0 else "REVIEW"
         reasons.append("Marja netă nu atinge pragul de cumpărare")
+    elif listing.get("costs_verified") is not True:
+        decision = "REVIEW"
+        warnings.append("Costurile de achiziție și revânzare nu au fost validate; valorile lipsă nu sunt presupuse zero")
     elif overall_confidence < 0.8 or any("necesită verificare" in w for w in warnings):
         decision = "REVIEW"
     else:
