@@ -213,7 +213,9 @@ class AlphaHandler(BaseHTTPRequestHandler):
             ctype="application/javascript; charset=utf-8"
         elif self.path=="/api/health":
             return self._json(200,{"status":"local_alpha","public_deployment_allowed":False,
-                                   "catalog_items":len(self.server.catalog)})
+                                   "catalog_items":len(self.server.catalog),
+                                   "reference_index_loaded":self.server.matcher is not None,
+                                   "reference_photos":self.server.matcher.reference_count if self.server.matcher else 0})
         else:
             return self._json(404,{"error":"Not found"})
         try:
