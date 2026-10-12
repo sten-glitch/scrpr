@@ -131,6 +131,14 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None,
         try:
             result["visual_reference_matches"] = matcher.match_observations(
                 [raw for _, raw in images], result["visual_evidence"]["observations"])
+            if (not result["visual_reference_matches"] and len(images) == 1
+                    and kind in {"single", "graded"}):
+                whole = matcher.match_entire_photo(images[0][1])
+                result["visual_reference_matches"] = [{
+                    "observation_index": None, "image_index": 0, "scope": "whole_photo",
+                    "note": "No verified card contour; compared the entire uploaded photograph",
+                    **whole,
+                }]
         except (ReferenceMatchError, LocalCVError) as exc:
             result["visual_reference_matches"] = []
             notes.append(f"Local reference matching unavailable: {exc}")
