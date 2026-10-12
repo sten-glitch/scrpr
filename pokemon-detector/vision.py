@@ -89,7 +89,7 @@ def validate_image_url(url: str) -> str:
         if u.fragment:
             raise VisionError("Image URL fragments not supported")
         return url
-    except (ValueError, urllib.parse.Error) as ex:
+    except ValueError as ex:
         raise VisionError("Invalid image URL") from ex
 
 
@@ -293,7 +293,14 @@ def provisional_listing(listing: dict, normalized: dict, catalog: list[dict]) ->
     if kind in {"single", "sealed"} and len(items) != 1:
         # Misclassified multiple objects are a lot, not a single verified item.
         kind = "lot"
-        notes.append("Multiple visible objects: reclassified as lot")
+        items.append({
+            "identity_key": None, "language": "unknown", "condition": "unknown",
+            "quantity": 1, "evidence": {
+                "identity_confidence": 0, "condition_confidence": 0,
+                "photo_confidence": 0, "authenticity_confidence": 0,
+            }, "sold_comps": [],
+        })
+        notes.append("Multiple visible objects: reclassified as lot with unknown inventory")
     if not isinstance(listing.get("asking_eur"), (int, float)) or isinstance(listing.get("asking_eur"), bool):
         raise VisionError("asking_eur must come from the marketplace listing")
     return {
