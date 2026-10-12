@@ -171,7 +171,9 @@ class TestSalesEvidence(unittest.TestCase):
             dict(identity_key=KEY, language="en", condition="NM", sold=True,
                  verified=True, price_eur=125+i,
                  source_url=f"https://example.com/{i}", sold_at="2026-09-10",
-                 match_confidence=.99)
+                 match_confidence=.99, verification_method="human_attestation",
+                 reviewer="fixture-reviewer", proof_reference=f"offline-receipt-{i}",
+                 reviewed_at="2026-10-11")
             for i in range(5)
         ]
         out = evaluate_deal(data, asof=DAY)
@@ -186,7 +188,9 @@ class TestSalesEvidence(unittest.TestCase):
             dict(identity_key=KEY, language="en", condition="NM", sold=True,
                  verified=True, price_eur=125+i,
                  source_url=f"https://example.com/receipt/{i}",
-                 sold_at="2026-10-10", match_confidence=.99)
+                 sold_at="2026-10-10", match_confidence=.99,
+                 verification_method="human_attestation", reviewer="fixture-reviewer",
+                 proof_reference=f"offline-receipt-{i}", reviewed_at="2026-10-11")
             for i in range(5)
         ]
         out = evaluate_deal(data, asof=DAY)
