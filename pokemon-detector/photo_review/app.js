@@ -149,6 +149,7 @@
     state.box = Array.isArray(record.bbox_xyxy) ? record.bbox_xyxy.slice() : null;
     $("caseId").value = record.case_id;
     $("kind").value = record.kind;
+    $("photoOrigin").value = record.photo_origin || "unknown";
     $("identity").value = record.expected_identity_key || "";
     $("reviewer").value = record.reviewer || "";
     $("evidence").value = record.annotation_reference || "";
@@ -166,6 +167,8 @@
     $("notes").value = "";
     $("confirmed").checked = false;
     $("kind").value = "single";
+    $("photoOrigin").value = "real_photo";
+    $("identity").disabled = false;
     renderBox();
   }
 
@@ -186,8 +189,9 @@
   function renderProgress() {
     const touched = new Set(state.cases.map((row) => row.image_file));
     const count = state.cases.length;
+    const real = new Set(state.cases.filter((row) => row.photo_origin === "real_photo").map((row) => row.image_file));
     text($("progressLabel"),
-      count + " reviewed card cases / goal ≥50 · " + touched.size + "/" +
+      count + " reviewed cases · " + real.size + "/50 distinct REAL photographs · " + touched.size + "/" +
       state.images.length + " photos annotated");
     $("progressFill").style.width = Math.min(100, count / 50 * 100) + "%";
     const histogram = {};
@@ -295,7 +299,7 @@
     const kind = $("kind").value;
     const row = {
       case_id: $("caseId").value.trim(),
-      kind: kind, split: "holdout",
+      kind: kind, split: "holdout", photo_origin: $("photoOrigin").value,
       image_file: currentName(),
       expected_identity_key: kind === "negative" ? null : $("identity").value.trim(),
       bbox_xyxy: state.box, annotation_verified: true,
