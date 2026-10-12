@@ -230,6 +230,7 @@ def main(argv=None):
     p.add_argument("--reference-manifest",required=True)
     p.add_argument("--reference-image-root",required=True)
     p.add_argument("--out",default="private/reference_accuracy.json")
+    p.add_argument("--html",help="Optional private static HTML audit report, e.g. private/reference_accuracy.html")
     args=p.parse_args(argv)
     matcher=ReferenceMatcher(args.index)
     cases=json.loads(Path(args.dataset).read_text(encoding="utf-8"))
@@ -238,7 +239,14 @@ def main(argv=None):
     target=Path(args.out)
     target.parent.mkdir(exist_ok=True,parents=True)
     target.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    print(f"Evaluated {report['metrics']['cases']} held-out photos; result {target}")
+    if args.html:
+        from reference_report import render_benchmark_report
+        html_path=Path(args.html)
+        html_path.parent.mkdir(exist_ok=True,parents=True)
+        html_path.write_text(render_benchmark_report(report),encoding="utf-8")
+        print(f"Private static HTML audit: {html_path}")
+    print(f"Evaluated {report['metrics']['cases']} annotated card regions across "
+          f"{report['metrics']['distinct_test_photos']} photos; result {target}")
 
 
 if __name__=="__main__":
