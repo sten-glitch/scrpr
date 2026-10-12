@@ -62,7 +62,7 @@ jobs:
           python -m unittest discover -s tests -v
           node tests/page.test.js
       - name: Build trusted card identity index
-        run: python catalog_export.py --tcgdex ../tcgdex/data --out vision_catalog.json
+        run: python catalog_export.py --tcgdex ../tcgdex/data --include-sealed --out vision_catalog.json
       - name: Scan eBay fixed-price listings and optionally analyze photos
         run: |
           python ebay_discovery.py --markets "$SCAN_REGIONS" \
