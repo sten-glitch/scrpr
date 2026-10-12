@@ -116,9 +116,12 @@ def evaluate_deal(listing: dict, *, asof: dt.date | None = None, min_roi: float 
         if e.get("counterfeit_risk") is True or e.get("edition_mismatch") is True:
             material_risk = True
             reasons.append(f"Item {i + 1}: semnal de fals / ediție nepotrivită")
-        if kind == "sealed" and (e.get("resealed_risk") is True or authenticity < 0.8):
-            material_risk = True
-            warnings.append("Sigiliul nu este verificat cu suficientă încredere")
+        if kind == "sealed":
+            if e.get("resealed_risk") is True:
+                material_risk = True
+                reasons.append(f"Item {i + 1}: semnal de posibilă resigilare")
+            if authenticity < 0.8:
+                warnings.append("Sigiliul nu este verificat cu suficientă încredere")
         matched = _comps(item, asof)
         prices = [c["price_eur"] for c in matched]
         valuation = round(_lower_quantile(prices), 2) if len(prices) >= 3 else None
