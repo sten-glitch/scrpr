@@ -149,6 +149,7 @@
     state.box = Array.isArray(record.bbox_xyxy) ? record.bbox_xyxy.slice() : null;
     $("caseId").value = record.case_id;
     $("kind").value = record.kind;
+    $("identity").disabled = record.kind === "negative";
     $("photoOrigin").value = record.photo_origin || "unknown";
     $("identity").value = record.expected_identity_key || "";
     $("reviewer").value = record.reviewer || "";
@@ -214,6 +215,7 @@
     els.photo.hidden = false;
     $("emptyPhoto").hidden = true;
     $("catalogSearch").value = "";
+    ++catalogRequest; // Discard stale asynchronous catalog matches from previous photos.
     $("catalogResults").replaceChildren();
     newCase();
     renderCases();
