@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>BIGSTEN — Intelligence Workbench</title>
+<style>
+:root{color-scheme:dark;--bg:#0a111a;--panel:#121d2a;--panel2:#182634;--line:#29394b;--text:#e8f0f7;--muted:#92a8b9;--mint:#d1ee9e;--yellow:#e7c88b;--red:#e99b99;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--mint);text-decoration:none}a:hover{text-decoration:underline}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+.sidebar{background:#0e1823;border-right:1px solid var(--line);padding:25px 15px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
+.brand{padding:0 12px 22px;border-bottom:1px solid var(--line);font-size:21px;font-weight:900;letter-spacing:.14em;display:flex;align-items:center;gap:10px}
+.mark{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:var(--mint);color:#0e1b18;font-weight:900;letter-spacing:0}
+.aside-heading{color:#60798d;font-size:10px;font-weight:800;letter-spacing:.13em;padding:8px 12px 0;text-transform:uppercase}
+.side-btn{width:100%;display:flex;align-items:center;text-align:left;gap:12px;color:#98afc4;background:transparent;border:1px solid transparent;border-radius:9px;padding:13px 14px;font-size:13px;font-weight:700}
+.side-btn:hover{color:var(--text);background:#1b2b39}
+.side-btn.selected{background:#243a42;border-color:#3e6359;color:var(--mint)}
+.side-ico{font-family:var(--mono);font-size:14px;min-width:19px}
+.sidebar-bottom{margin-top:auto;border-top:1px solid var(--line);padding:18px 12px 4px;font-size:11px;color:var(--muted);line-height:1.8}
+.content{max-width:1580px;width:100%;padding:28px 40px 90px;margin:0 auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:26px;border-bottom:1px solid var(--line);margin-bottom:32px}
+.breadcrumb{font-size:11px;letter-spacing:.17em;font-weight:850;color:#87a2b8;text-transform:uppercase}
+.health{border:1px solid #3a5846;background:#203c30;border-radius:999px;color:#d1ee9e;padding:8px 13px;font-size:10px;font-weight:800;letter-spacing:.1em}
+.page{display:none}.page.active{display:block}
+h1{font-size:clamp(30px,3.4vw,46px);letter-spacing:-.055em;line-height:1.1;margin:0 0 12px;font-weight:800}
+h2{font-size:19px;letter-spacing:-.035em;margin:0}
+h3{font-size:15px;margin:0;color:var(--text)}
+.subtitle{max-width:780px;color:var(--muted);font-size:13px;line-height:1.8;margin:0 0 27px}
+.label{font-size:10px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--mint);margin:0 0 15px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 24px}
+.metric{border:1px solid var(--line);background:var(--panel);border-radius:13px;padding:20px 22px;min-height:130px}
+.metric .val{font:600 31px var(--mono);letter-spacing:-.07em;margin:20px 0 4px}
+.metric .key{font-size:10px;color:var(--muted);letter-spacing:.11em;font-weight:800;text-transform:uppercase}
+.metric .info{font-size:11px;color:#89a1b3}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:22px;min-width:0}
+.card-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:19px}
+.card-title span{font-size:11px;color:var(--muted)}
+.cards-two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.65fr);gap:17px}
+.card p{line-height:1.7}
+button.primary{background:var(--mint);border:1px solid var(--mint);color:#132014;border-radius:9px;padding:12px 18px;font-weight:850;font-size:12px}
+button.primary:hover{background:#efffcd}
+button.secondary{color:#c9d8e6;border:1px solid #455970;border-radius:9px;background:#253549;padding:11px 15px;font-weight:800;font-size:12px}
+button.secondary:hover{background:#31465e}
+button.subtle{background:transparent;border:0;padding:7px 8px;color:#bfd5e2;font-weight:700;font-size:12px}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.inline-note{background:#1d2f3c;border:1px solid #3b5161;border-radius:9px;padding:13px 15px;font-size:12px;color:#aec3d3;line-height:1.7}
+.inline-note.important{border-color:#665b45;background:#2a2a25;color:#edcd91}
+.panel-empty{border:1px dashed #405368;border-radius:11px;padding:34px 22px;text-align:center;color:var(--muted);line-height:1.7;font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{text-transform:uppercase;font-size:10px;letter-spacing:.11em;color:#7892a8;font-weight:800;text-align:left;padding:12px 8px;border-bottom:1px solid var(--line)}
+td{padding:16px 8px;border-bottom:1px solid #243648;vertical-align:middle;color:#afc4d5;line-height:1.5}
+td strong{color:#e6eff5;font-weight:750}td small{color:#8199ac;display:block;font-size:11px}
+.scroll-table{overflow:auto;max-width:100%}
+.cell-num{text-align:right;font-family:var(--mono);white-space:nowrap}
+.badge{border-radius:5px;font-size:10px;letter-spacing:.08em;font-weight:850;padding:5px 7px;color:#a8c5ce;background:#243744;white-space:nowrap}
+.badge.WATCHLIST{background:#294436;color:#b8eba3}
+.badge.PURCHASED{background:#493f32;color:#ebc595}
+.badge.SOLD{background:#2a4948;color:#b7ece5}
+.badge.DISMISSED,.badge.ARCHIVED{background:#433038;color:#e5b7ba}
+.positive{color:var(--mint)}.negative{color:var(--red)}
+.sectionheading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:19px}
+.sectionheading p{color:var(--muted);font-size:12px;margin:9px 0 0}
+.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.formgrid .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:7px;font-size:11px;letter-spacing:.04em;font-weight:700;color:#a8bacb}
+input,select,textarea{background:#0b1521;border:1px solid #35495d;border-radius:8px;color:#f1f5fa;padding:12px 13px;width:100%;outline:none;min-width:0}
+input:focus,select:focus,textarea:focus{border-color:var(--mint)}
+textarea{resize:vertical;min-height:88px}
+input::placeholder,textarea::placeholder{color:#587189}
+legend{font-size:13px;font-weight:800;margin:0 0 18px}
+fieldset{padding:0;border:0;margin:0}
+details{border-top:1px solid var(--line);padding:16px 0}
+summary{cursor:pointer;color:#bdd7e1;font-size:12px;font-weight:750}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#adc0d6}
+.toast{position:fixed;bottom:22px;right:22px;z-index:40;padding:14px 18px;background:#234337;color:#d8ffcf;border:1px solid #53785a;box-shadow:0 8px 40px #0008;border-radius:12px;max-width:440px;font-size:13px}
+.toast.error{background:#422833;color:#ffdfdf;border-color:#845663}
+dialog{background:#101c2a;border:1px solid #3b5166;border-radius:15px;color:var(--text);padding:0;width:min(840px,calc(100vw - 30px));max-height:calc(100vh - 30px);overflow-y:auto}
+dialog::backdrop{background:rgba(3,10,18,.82);backdrop-filter:blur(4px)}
+.dialog-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:20px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#101c2a;z-index:2}
+.dialog-body{padding:24px}
+.divider{border-top:1px solid var(--line);margin:24px 0}
+.mono{font-family:var(--mono)}
+.number-stamp{font-weight:750;color:var(--mint);font-family:var(--mono)}
+.status-line{font-size:11px;color:#a6b9ca;letter-spacing:.1em}
+.event{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-size:12px}
+.event small{color:#7089a0}
+a.tablink{display:flex;align-items:center;gap:12px;padding:13px 14px;color:#96b0c7;border-radius:9px;font-size:13px;font-weight:750}
+a.tablink:hover{background:#1d2c3d;text-decoration:none}
+@media(max-width:1120px){.grid4{grid-template-columns:repeat(2,1fr)}.cards-two{grid-template-columns:1fr}.content{padding:24px 22px}}
+@media(max-width:720px){.layout{display:block}.sidebar{position:static;width:100%;height:auto;padding:13px}.brand{padding:4px 10px 11px}.aside-heading,.sidebar-bottom{display:none}.sidebar nav{display:flex;overflow-x:auto;gap:4px}.side-btn,a.tablink{width:auto;white-space:nowrap;padding:9px 11px}.content{padding:24px 14px}.grid4{gap:8px}.metric{padding:14px;min-height:114px}.metric .val{font-size:24px}.formgrid{grid-template-columns:1fr}.card{padding:15px}.topbar{align-items:flex-start}.health{white-space:nowrap}}
+</style>
+<script src="/workspace.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+<div class="brand"><span class="mark">B</span> BIGSTEN</div>
+<div class="aside-heading">Intelligence</div>
+<nav aria-label="Workbench sections">
+<button class="side-btn selected" data-tab="overview"><span class="side-ico">◈</span> Command Center</button>
+<button class="side-btn" data-tab="radar"><span class="side-ico">◎</span> Market Radar</button>
+<button class="side-btn" data-tab="pipeline"><span class="side-ico">▤</span> Opportunity Pipeline</button>
+<button class="side-btn" data-tab="add"><span class="side-ico">＋</span> Add Lead</button>
+<button class="side-btn" data-tab="portfolio"><span class="side-ico">▦</span> Trades & Outcomes</button>
+</nav>
+<div class="aside-heading">Tools</div>
+<a class="tablink" href="/analyze"><span class="side-ico">▧</span> Photo Intelligence ↗</a>
+<button class="side-btn" data-tab="sources"><span class="side-ico">⚙</span> Sources & Settings</button>
+<div class="sidebar-bottom">LOCAL DEVELOPMENT BUILD<br>Single user · Private SQLite<br>Not hosted · Not investment advice<br><span id="engineLabel">Connecting to local engine…</span></div>
+</aside>
+<main class="content">
+<header class="topbar"><div class="breadcrumb">BIGSTEN / COLLECTION INTELLIGENCE / WORKBENCH</div><div class="health">● LOCAL ENGINE</div></header>
+<section id="overview" class="page active">
+<p class="label">Monitor. Verify. Decide.</p><h1>Intelligence, not guesses.</h1>
+<p class="subtitle">A complete local research workflow: discover signals, inspect actual listings, track leads, model costs, record trades, and audit realized outcomes. Market guide spreads are NOT confirmed profits.</p>
+<div class="grid4">
+<div class="metric"><div class="key">Tracked leads</div><div id="statLeads" class="val">—</div><div class="info">Stored privately on your computer</div></div>
+<div class="metric"><div class="key">Watchlist</div><div id="statWatch" class="val">—</div><div class="info">Human-review queue</div></div>
+<div class="metric"><div class="key">Open positions</div><div id="statPositions" class="val">—</div><div class="info">User-recorded purchases</div></div>
+<div class="metric"><div class="key">Observed market signals</div><div id="statSignals" class="val">—</div><div class="info">Asking vs guide; unverified</div></div>
+</div>
+<div class="cards-two">
+<div class="card"><div class="card-title"><h2>Market radar preview</h2><button class="subtle" data-tab="radar">Explore all →</button></div>
+<div id="radarPreview" class="panel-empty">No local feed imported. Go to Market Radar and import the owner's detector feed.</div></div>
+<div class="card"><div class="card-title"><h2>Operating principles</h2><span>Trust architecture</span></div>
+<div class="inline-note important">No invented sales. No unverified profitability claims. No automated purchasing.</div>
+<p class="subtitle" style="margin:15px 0">Use the Photo Intelligence lab to identify possible printings and listing contradictions. Move good leads to WATCHLIST only after manual review.</p>
+<div class="btnrow"><button class="primary" data-tab="add">Add a listing →</button><a href="/analyze" class="secondary" style="padding:12px;color:#d6e5ea">Photo analysis ↗</a></div></div>
+</div>
+<div class="card" style="margin-top:18px"><div class="card-title"><h2>Recent opportunity pipeline</h2><button class="subtle" data-tab="pipeline">Open pipeline →</button></div><div id="recentLeads" class="panel-empty">No leads yet.</div></div>
+</section>
+
+<section id="radar" class="page">
+<div class="sectionheading"><div><p class="label">Signal discovery</p><h1>Market Radar</h1><p>Internal research signals from the existing BIGSTEN detector.</p></div>
+<button class="primary" id="refreshRadar">Import current feed ↓</button></div>
+<div class="inline-note important">These rows compare a LOWEST ASKING PRICE with a 30-day guide price. They do not identify an executable deal, a sold comparison, liquidity or net resale profit. Commercial reuse of third-party data requires separate authorization.</div>
+<div id="feedStatus" class="subtitle" style="margin:15px 0">No feed imported.</div>
+<div class="card"><div class="card-title"><h2>Research candidates</h2><span id="radarCount">0 cards</span></div>
+<div id="radarTable" class="panel-empty">Refresh the radar to see candidates from our existing detector.</div></div>
+</section>
+
+<section id="pipeline" class="page">
+<div class="sectionheading"><div><p class="label">Evidence workflow</p><h1>Opportunity Pipeline</h1><p>Every status change and assumption is traceable.</p></div>
+<button class="primary" data-tab="add">+ New lead</button></div>
+<div class="card"><div class="card-title"><h2>Tracked opportunities</h2>
+<label class="field" style="min-width:180px">Show status
+<select id="statusFilter"><option value="">All</option><option>INBOX</option><option>REVIEW</option><option>WATCHLIST</option><option>PURCHASED</option><option>SOLD</option><option>DISMISSED</option><option>ARCHIVED</option></select></label>
+</div><div id="pipelineTable" class="panel-empty">No opportunities have been saved.</div></div>
+</section>
+
+<section id="add" class="page">
+<p class="label">Capture first, decide later</p><h1>Add a listing.</h1>
+<p class="subtitle">Enter actual information from the source. BIGSTEN keeps seller claims separate from independent visual and transaction evidence.</p>
+<div class="cards-two"><div class="card"><form id="leadForm">
+<div class="formgrid">
+<label class="field full">Seller title<input name="title" maxlength="300" required placeholder="Charizard 1st edition PSA 10 (seller claim)"></label>
+<label class="field">Category<select name="kind"><option value="single">Single card</option><option value="graded">Graded</option><option value="sealed">Sealed</option><option value="binder">Binder</option><option value="lot">Lot / collection</option></select></label>
+<label class="field">Asking price (EUR)<input name="asking_eur" type="number" min=".01" step=".01" required placeholder="150.00"></label>
+<label class="field">Source<select name="source"><option value="manual">Manual entry</option><option value="community">Community</option><option value="ebay">eBay</option><option value="cardmarket">Cardmarket</option><option value="cardtrader">CardTrader</option><option value="tcgplayer">TCGplayer</option><option value="auction">Auction</option><option value="own_inventory">Own inventory</option><option value="radar_research">Radar research</option><option value="other">Other</option></select></label>
+<label class="field">Source link (optional)<input name="source_url" type="url" placeholder="https://…"></label>
+<label class="field full">Description<textarea name="description" maxlength="1800" placeholder="Copy relevant seller claims here"></textarea></label>
+<label class="field full">Private review note<input name="note" maxlength="1000" placeholder="Why is this worth investigating?"></label>
+</div>
+<div class="btnrow" style="margin-top:24px"><button type="submit" class="primary" id="saveLead">Save to private pipeline →</button><a href="/analyze">Need photo recognition? Open Photo Lab ↗</a></div>
+</form></div>
+<div class="card"><h2>What happens after capture?</h2>
+<p class="subtitle" style="margin-top:12px">Every lead gets its own audit trail. Research its image, verify print, language and condition, estimate full costs as explicitly declared assumptions, and wait for actual sale records before treating a price as reliable.</p>
+<div class="inline-note">Saving an item does not prove ownership, product authenticity, completed sale, or expected ROI.</div></div></div>
+</section>
+
+<section id="portfolio" class="page">
+<p class="label">Reality over forecasts</p><h1>Trades & Outcomes</h1>
+<p class="subtitle">Record your own actual buys and exits. Unlike optimistic paper returns, unsold positions remain visible. All results are self-reported until independently documented.</p>
+<div class="grid4">
+<div class="metric"><div class="key">Open positions</div><div id="portOpen" class="val">—</div><div class="info">Awaiting recorded sale</div></div>
+<div class="metric"><div class="key">Capital in positions</div><div id="portCost" class="val">—</div><div class="info">EUR · self-reported</div></div>
+<div class="metric"><div class="key">Recorded exits</div><div id="portSold" class="val">—</div><div class="info">Sales entered by user</div></div>
+<div class="metric"><div class="key">Recorded net P/L</div><div id="portProfit" class="val">—</div><div class="info">EUR · self-reported</div></div>
+</div>
+<div class="card"><div class="card-title"><h2>Positions and exits</h2><span>Click a position to update</span></div>
+<div id="portfolioTable" class="panel-empty">No buys recorded yet. Move a verified lead to WATCHLIST before entering an actual purchase.</div></div>
+</section>
+
+<section id="sources" class="page">
+<p class="label">Provenance & limits</p><h1>Sources and Settings</h1>
+<p class="subtitle">BIGSTEN distinguishes what exists, what requires permission, and what has actually been connected.</p>
+<div class="cards-two"><div class="card"><h2>Current local sources</h2>
+<div class="event"><strong>BIGSTEN owned detector feed</strong><span class="badge">OPT-IN IMPORT</span></div>
+<p class="subtitle">Only a research signal from public price-guide and asking-price data. Refresh on request; does not mean authorized commercial redistribution.</p>
+<div class="event"><strong>User listings</strong><span class="badge WATCHLIST">LOCAL SQLITE</span></div>
+<div class="event"><strong>User photos / OpenCV / pHash + ORB</strong><span class="badge">LOCAL ONLY</span></div>
+<div class="event"><strong>Human-attested sales evidence</strong><span class="badge">SEPARATE PRIVATE IMPORT</span></div>
+<div class="event"><strong>eBay commercial sold-sales feed</strong><span class="badge DISMISSED">NOT CONNECTED</span></div>
+</div>
+<div class="card"><h2>Data control</h2>
+<p class="subtitle" style="margin-top:14px">The database is stored in the ignored private folder on this computer. Do not deploy this single-user prototype on a public server. Authentication, privacy/tenant isolation, approved external data rights and billing are separate release gates.</p>
+<button class="secondary" id="exportWorkspace">Export local workspace JSON ↓</button>
+<div style="margin-top:25px" class="inline-note important">Commercial-ready? NO. No user accounts, secure tenancy, permitted third-party resale analytics or payment processing are active.</div>
+<div id="sourcesSummary" class="subtitle" style="margin-top:18px"></div>
+</div></div>
+</section>
+</main>
+</div>
+
+<dialog id="leadDialog" aria-labelledby="dialogTitle">
+<div class="dialog-top"><div><div class="label">Lead record / evidence history</div><h2 id="dialogTitle">Opportunity</h2><p class="subtitle" id="dialogSubtitle" style="margin:6px 0 0"></p></div><button class="secondary" id="closeDialog">Close ×</button></div>
+<div class="dialog-body">
+<div class="btnrow" id="statusButtons"></div>
+<div class="divider"></div>
+<div id="leadEvidence" class="inline-note"></div>
+<div class="divider"></div>
+<details open><summary>Hypothetical resale / costs (not a market appraisal)</summary>
+<p class="subtitle" style="margin-top:12px">All amounts must be entered explicitly. A missing cost is unknown, not zero; only enter 0 when you actually know that cost is zero.</p>
+<form id="scenarioForm"><div class="formgrid">
+<label class="field">Hypothetical resale target (€)<input name="target_resale_eur" type="number" min=".01" step=".01" required placeholder="NOT a verified market price"></label>
+<label class="field">Selling fee (%)<input name="selling_fee_pct" type="number" min="0" max="99.99" step=".01" required placeholder="Enter exact or 0 if known"></label>
+<label class="field">Inbound shipping (€)<input name="inbound_shipping_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Purchase taxes (€)<input name="purchase_taxes_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Customs (€)<input name="customs_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Buyer fees (€)<input name="buyer_fees_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Outbound shipping (€)<input name="outbound_shipping_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Packaging (€)<input name="packaging_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Other selling costs (€)<input name="other_selling_eur" type="number" min="0" step=".01" required></label>
+</div><button class="secondary" style="margin-top:18px" type="submit">Calculate hypothetical ROI →</button></form>
+<div class="inline-note" id="scenarioResults" style="margin-top:16px">No assumptions entered.</div>
+</details>
+<details id="purchasePanel"><summary>Record actual purchase</summary><form id="purchaseForm" style="margin:15px 0"><div class="formgrid">
+<label class="field">Purchase date<input name="purchased_at" type="date" required></label>
+<label class="field">Actual item price (€)<input name="price_eur" type="number" min=".01" step=".01" required></label>
+<label class="field full">Total actual acquisition extras (€)<input name="acquisition_extras_eur" type="number" min="0" step=".01" required placeholder="Explicit shipping/taxes/fees sum"></label></div>
+<button class="primary" style="margin-top:15px" type="submit">Record purchase →</button></form></details>
+<details id="salePanel"><summary>Record actual sale / realized outcome</summary><form id="saleForm" style="margin:15px 0"><div class="formgrid">
+<label class="field">Sale date<input name="sold_at" type="date" required></label>
+<label class="field">Gross sale proceeds (€)<input name="sale_gross_eur" type="number" min=".01" step=".01" required></label>
+<label class="field">All fees / shipping costs (€)<input name="selling_extras_eur" type="number" min="0" step=".01" required></label>
+<label class="field">Private receipt reference (optional)<input name="proof_reference" maxlength="180" placeholder="Receipt/settlement ID stored privately"></label></div>
+<button class="primary" style="margin-top:15px" type="submit">Record sale →</button></form></details>
+<div id="tradeSummary" class="inline-note" style="margin-top:18px"></div>
+<div class="divider"></div><h3>Immutable activity history</h3><div id="auditTrail"></div>
+</div>
+</dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body></html>
