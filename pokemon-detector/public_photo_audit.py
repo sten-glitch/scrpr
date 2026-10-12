@@ -35,6 +35,34 @@ class PublicAuditError(ValueError):
     pass
 
 
+def title_only_review_hint(source: str, title: str) -> str:
+    """Conservative review-queue hint from filename, never visual ground truth.
+
+    Source metadata is frequently wrong, missing or misleading. Even obvious
+    negative titles require someone to inspect the actual photograph.
+    """
+    if source == "roboflow_preview":
+        return "PROVIDER_PREVIEW_REQUIRES_HUMAN_REVIEW"
+    t = (title if isinstance(title,str) else "").casefold()
+    hard_negative = (
+        "qr code", "logo", "symbol", "nintendo switch", "translucent cartridge",
+        "medallion", "card ereader", "card ereader", "eon ticket",
+    )
+    if any(phrase in t for phrase in hard_negative):
+        return "POTENTIAL_HARD_NEGATIVE_TITLE_ONLY"
+    scene = (
+        "vending machine", "distributeur", "player image", "champion photo",
+        "national championships", "card battle", "animethon", "pyrkon",
+    )
+    if any(phrase in t for phrase in scene):
+        return "CONTEXT_SCENE_TITLE_ONLY"
+    card_subject = ("pokemon cards", "pokémon cards", "pokemon collection",
+                    "pokémon collection", "cards and sets")
+    if any(phrase in t for phrase in card_subject):
+        return "LIKELY_CARD_SUBJECT_TITLE_ONLY"
+    return "UNCLASSIFIED_TITLE_ONLY"
+
+
 def run_public_photo_audit(*, commons=12, previews=True, search=None,
                            image_analysis=analyze_local_photo,
                            commons_import=import_commons,
@@ -106,8 +134,11 @@ def run_public_photo_audit(*, commons=12, previews=True, search=None,
                     if (isinstance(bbox,list) and len(bbox)==4
                             and all(type(x) in (float,int) and math.isfinite(x) and 0<=x<=1 for x in bbox)):
                         boxes.append([round(float(x),4) for x in bbox])
+                source_title = item.get("source_title", item.get("image_file"))
                 cases.append({
                     "source":source,
+                    "title_only_review_hint":title_only_review_hint(source,source_title),
+                    "review_hint_is_ground_truth":False,
                     "source_page":item.get("source_page"),
                     "author":item.get("author",""),
                     "license":item.get("license",item.get("license_displayed","")),
@@ -136,6 +167,10 @@ def run_public_photo_audit(*, commons=12, previews=True, search=None,
             "independently_verified_photo_ground_truth":0,
             "identified_pokemon_card_printings":0,
             "real_photo_card_identity_accuracy":None,
+            "title_suspected_negatives_with_rectangles":sum(
+                x["candidate_rectangles"] for x in cases
+                if x["title_only_review_hint"]=="POTENTIAL_HARD_NEGATIVE_TITLE_ONLY"
+            ),
             "card_box_precision":None,
             "card_box_recall":None,
         },
@@ -143,6 +178,7 @@ def run_public_photo_audit(*, commons=12, previews=True, search=None,
         "failures":failures[:50],
         "limitations":[
             "Photograph presence of Pokémon cards is not independently established",
+            "Filename-based triage is NOT visual verification; candidate hard negatives must be inspected by a human",
             "Card-like rectangles may include other objects; no verified bounding-box ground truth",
             "Neither geometry precision nor exact printing/foil/grade accuracy can be calculated from unlabeled photos",
             "Source license claims may not cover embedded artwork or commercial exploitation",
@@ -180,12 +216,13 @@ def audit_html(audit: dict) -> str:
         ("Card-like contours","provisional_rectangles"),
         ("Photos with candidates","photos_with_at_least_one_rectangle"),
         ("Download or analysis errors","download_or_analysis_failures"),
+        ("Potential negative-scene contours (review needed)","title_suspected_negatives_with_rectangles"),
         ("Confirmed Pokémon printings","identified_pokemon_card_printings"),
     ):
         parts.extend(["<div class='stat'><strong>",e(summary.get(key,0)),
                       "</strong><span>",e(label),"</span></div>"])
     parts.extend(["</div><h2>Case-by-case provenance and detections</h2><table><thead><tr>",
-                 "<th>Source</th><th>Photo title</th><th>License / author</th><th>Contoured candidates</th>",
+                 "<th>Source</th><th>Photo title</th><th>Title-only review hint</th><th>License / author</th><th>Contoured candidates</th>",
                  "</tr></thead><tbody>"])
     for c in sources:
         # Only allow known-source HTTPS page links to avoid HTML protocol injection.
@@ -199,6 +236,7 @@ def audit_html(audit: dict) -> str:
         else:
             title=e(c.get("source_title"))
         parts.extend(["<tr><td>",e(c.get("source")),"</td><td>",title,
+                      "</td><td>",e(c.get("title_only_review_hint","UNCLASSIFIED_TITLE_ONLY")),
                       "</td><td>",e(c.get("license"))," — ",e(c.get("author")),
                       "</td><td>",e(c.get("candidate_rectangles",0)),"</td></tr>"])
     parts.extend(["</tbody></table><h2>Uncertainties</h2><ul>"])
