@@ -2,6 +2,8 @@
 import sys
 import tempfile
 import unittest
+import hashlib
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -109,6 +111,51 @@ class TestReferenceBenchmark(unittest.TestCase):
         p=self.case("pB",b"positive-B","demo:B",bbox_xyxy=[1,0,0,1])
         with self.assertRaisesRegex(ReferenceBenchmarkError,"bbox"):
             self.run_benchmark([p])
+
+    def test_distinct_binder_crops_same_photo_are_independent_cases_not_photos(self):
+        one=self.case("region01",b"test-binder-photo","demo:A",
+                      kind="binder",bbox_xyxy=[.05,.06,.43,.45],
+                      photo_origin="real_photo")
+        two=self.case("region02",b"test-binder-photo","demo:A",
+                      kind="binder",bbox_xyxy=[.55,.50,.94,.96],
+                      photo_origin="real_photo")
+        two["image_file"]=one["image_file"]
+        matched={"status":"VISUAL_CANDIDATE","matched_identity_key":"demo:A","candidates":[]}
+        with patch("reference_benchmark._evaluate_photo",return_value=matched):
+            output=self.run_benchmark([one,two])
+        self.assertEqual(output["metrics"]["cases"],2)
+        self.assertEqual(output["metrics"]["distinct_test_photos"],1)
+        self.assertEqual(output["metrics"]["distinct_real_photos"],1)
+        self.assertEqual(output["pilot_sample_gate"]["status"],"INSUFFICIENT_REAL_PHOTO_VALIDATION")
+
+    def test_overlapping_regions_on_one_photo_rejected(self):
+        one=self.case("region01",b"test-binder-photo","demo:A",
+                      kind="binder",bbox_xyxy=[.05,.05,.43,.45])
+        two=self.case("region02",b"test-binder-photo","demo:A",
+                      kind="binder",bbox_xyxy=[.06,.06,.43,.46])
+        two["image_file"]=one["image_file"]
+        matched={"status":"VISUAL_CANDIDATE","matched_identity_key":"demo:A","candidates":[]}
+        with patch("reference_benchmark._evaluate_photo",return_value=matched):
+            with self.assertRaisesRegex(ReferenceBenchmarkError,"Repeated query region"):
+                self.run_benchmark([one,two])
+
+    def test_photo_changed_since_human_label_is_rejected(self):
+        case=self.case("case_change",b"positive-A","demo:A",
+                       photo_sha256="0"*64,photo_origin="real_photo")
+        with self.assertRaisesRegex(ReferenceBenchmarkError,"changed after annotation"):
+            self.run_benchmark([case])
+
+    def test_real_photo_and_synthetic_provenance_never_claims_certified_accuracy(self):
+        case=self.case("positive",b"positive-A","demo:A",photo_origin="real_photo")
+        result=self.run_benchmark([case])
+        self.assertEqual(result["metrics"]["distinct_real_photos"],1)
+        self.assertFalse(result["pilot_sample_gate"]["accuracy_certified"])
+        self.assertFalse(result["pilot_sample_gate"]["fifty_distinct_real_photos"])
+        case2=self.case("synthetic",b"positive-B","demo:B",
+                        photo_origin="synthetic_demo")
+        result2=self.run_benchmark([case,case2])
+        self.assertEqual(result2["metrics"]["distinct_synthetic_photos"],1)
+        self.assertEqual(result2["metrics"]["distinct_real_photos"],1)
 
     def test_safe_relative_query_file_only(self):
         q=self.case("pA",b"positive-A","demo:A")
