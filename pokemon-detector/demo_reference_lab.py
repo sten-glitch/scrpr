@@ -108,7 +108,6 @@ def create_demo(root: str | Path="private", *, test_match=True) -> dict:
     }
     if test_match:
         m=ReferenceMatcher(target)
-        _,mat=_modules()[0],None
         image=(query_dir/"demo_query_A.png").read_bytes()
         output=m.match_entire_photo(image)
         result["self_test"]={
