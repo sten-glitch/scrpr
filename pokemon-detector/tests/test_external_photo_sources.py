@@ -1,6 +1,7 @@
 """No-network tests for BIGSTEN's rights-aware Commons/Roboflow source adapters."""
 import json
 import os
+import urllib.error
 import sys
 import tempfile
 import types
@@ -129,6 +130,28 @@ class TestExternalPhotoSources(unittest.TestCase):
             out=import_roboflow_public_previews(dry_run=True)
             self.assertEqual(len(out["items"]),3)
             opened.assert_not_called()
+
+    def test_commons_respects_429_and_stops_requesting_more_images(self):
+        sample={
+            "query":{"pages":{str(i):{
+                "title":f"File:Pokemon card collection {i}.jpg",
+                "imageinfo":[{
+                    "url":f"https://upload.wikimedia.org/photo-{i}.jpg",
+                    "extmetadata":{"LicenseShortName":{"value":"CC BY 4.0"}}
+                }]
+            } for i in range(8)}}
+        }
+        limited=urllib.error.HTTPError(
+            "https://upload.wikimedia.org/photo-0.jpg",429,
+            "Too Many Requests",{},None
+        )
+        with tempfile.TemporaryDirectory() as root,\
+             patch("external_photo_sources._request_json",return_value=sample),\
+             patch("external_photo_sources._safe_image_download",side_effect=limited) as downloader:
+            data=import_commons(6,Path(root)/"limited")
+        self.assertTrue(data["stopped_after_http_429"])
+        self.assertEqual(len(data["failed"]),1)
+        self.assertEqual(downloader.call_count,1)
 
     def test_roboflow_requires_environment_key_without_side_effects(self):
         with patch.dict(os.environ,{"ROBOFLOW_API_KEY":""}):
