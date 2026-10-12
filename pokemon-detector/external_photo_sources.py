@@ -76,6 +76,15 @@ SOURCES = {
     },
 }
 
+# Exact thumbnails linked by the public Roboflow dataset page as examples.
+# These are UNLABELED previews, not guaranteed by the uploader to be owned,
+# accurate, or independently cleared for downstream commercial use.
+PUBLIC_ROBOFLOW_PREVIEWS = (
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/08xJWiqOpJif2IzGrR7f/thumb.jpg",
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0B8uOnE24QytHZReG4oC/thumb.jpg",
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0DaJGzfqRmLZn4LyuMy8/thumb.jpg",
+)
+
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "BigstenLocalResearch/0.2 (contact: see project github.com/sten-glitch/scrpr)"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -276,6 +285,75 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
     return meta
 
 
+def import_roboflow_public_previews(root="private/web-research/roboflow-previews",
+                                     *, dry_run=False):
+    """Download ONLY publicly linked example thumbnails, no API key.
+
+    These are ~200px samples, useful for smoke tests but not a reliable
+    catalog reference library or exact-identity validation set.
+    """
+    target=Path(root).expanduser().resolve()
+    if not dry_run:
+        if target.exists() and any(target.iterdir()):
+            raise PhotoSourceError("Preview destination already contains files; refusing overwrite")
+        target.mkdir(parents=True,exist_ok=True)
+    saved,errors=[],[]
+    for i,url in enumerate(PUBLIC_ROBOFLOW_PREVIEWS, start=1):
+        if (urllib.parse.urlsplit(url).hostname!="source.roboflow.com"
+                or not url.endswith("/thumb.jpg")):
+            raise PhotoSourceError("Preview must be exact publicly linked Roboflow image")
+        item={
+            "source":"roboflow-public-preview",
+            "source_page":SOURCES["detector"]["url"],
+            "image_url":url,
+            "image_file":f"roboflow_preview_{i:02d}.jpg",
+            "license_displayed":SOURCES["detector"]["license_displayed"],
+            "dataset_publisher":"TCG card dectector",
+            "photographer_rights_verified":False,
+            "pokemon_artwork_rights_verified":False,
+            "exact_card_identity_verified":False,
+            "annotation_verified":False,
+            "commercial_reuse_cleared":False,
+            "status":"CANDIDATE_NOT_DOWNLOADED" if dry_run else "PENDING",
+        }
+        if dry_run:
+            saved.append(item)
+            continue
+        try:
+            request=urllib.request.Request(url, headers={
+                "User-Agent":USER_AGENT,"Accept":"image/jpeg"})
+            with urllib.request.urlopen(request,timeout=20) as response:
+                if (response.status!=200 or
+                        urllib.parse.urlsplit(response.geturl()).hostname!="source.roboflow.com"):
+                    raise PhotoSourceError("Roboflow preview was not served by trusted host")
+                mime=response.headers.get("Content-Type","").split(";")[0].lower()
+                if mime!="image/jpeg":
+                    raise PhotoSourceError("Unexpected preview MIME type")
+                raw=response.read(MAX_IMAGE_BYTES+1)
+            if not 0<len(raw)<=MAX_IMAGE_BYTES or not (raw.startswith(b"\xff\xd8\xff") and raw.endswith(b"\xff\xd9")):
+                raise PhotoSourceError("Malformed or oversized preview")
+            (target/item["image_file"]).write_bytes(raw)
+            item["photo_sha256"]=hashlib.sha256(raw).hexdigest()
+            item["bytes"]=len(raw)
+            item["status"]="DOWNLOADED_PUBLIC_UNLABELED_PREVIEW"
+            saved.append(item)
+        except (OSError,PhotoSourceError) as exc:
+            errors.append({"source_page":item["source_page"],
+                           "preview_number":i,"reason":str(exc)[:120]})
+    data={
+        "source":"Roboflow public dataset page examples",
+        "imported_at":now_iso(),"dry_run":bool(dry_run),
+        "benchmark_ready":False,"exact_card_identity_verified":False,
+        "commercial_rights_cleared":False,
+        "notes":"Public previews only; tiny photos and dataset CC BY label do not confirm embedded Pokemon artwork rights, individual photographer consent or exact card printing.",
+        "items":saved,"failed":errors,
+    }
+    if not dry_run:
+        (target/"SOURCE_ATTRIBUTION.json").write_text(
+            json.dumps(data,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+    return data
+
+
 def download_roboflow(dataset: str, root="private/web-research"):
     """Use Roboflow's documented authenticated export SDK, not scraping.
 
@@ -334,6 +412,9 @@ def main(argv=None):
     commons.add_argument("--max-images", type=int, default=12)
     commons.add_argument("--out", default="private/web-research/commons")
     commons.add_argument("--dry-run", action="store_true")
+    previews = commands.add_parser("previews", help="Fetch three public dataset thumbnail examples without API key")
+    previews.add_argument("--out",default="private/web-research/roboflow-previews")
+    previews.add_argument("--dry-run",action="store_true")
     roboflow = commands.add_parser("roboflow", help="Official Roboflow authenticated dataset export")
     roboflow.add_argument("--source", choices=["detector", "binder", "scanner"], required=True)
     roboflow.add_argument("--out", default="private/web-research")
@@ -342,6 +423,8 @@ def main(argv=None):
         result = SOURCES
     elif a.command == "commons":
         result = import_commons(a.max_images, a.out, dry_run=a.dry_run)
+    elif a.command == "previews":
+        result = import_roboflow_public_previews(a.out,dry_run=a.dry_run)
     else:
         result = download_roboflow(a.source, a.out)
     print(json.dumps(result, indent=2, ensure_ascii=False))
