@@ -1,4 +1,5 @@
 """BIGSTEN local workbench HTTP contract tests on loopback only."""
+import base64
 import datetime as dt
 import json
 import sys
@@ -106,6 +107,32 @@ class TestWorkspaceAPI(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertGreaterEqual(len(radar["signals"]),2)
         self.assertTrue(radar["commercial_use_rights_not_verified"])
+
+    def test_photo_lab_analysis_saved_to_pipeline_and_images_not_stored(self):
+        png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+y0QcAAAAASUVORK5CYII=")
+        req={
+            "title":"Synthetic 1px image test","description":"PSA 10 claim",
+            "kind":"single","source":"manual","asking_eur":200,
+            "images":[{"mime":"image/png","base64":base64.b64encode(png).decode()}],
+        }
+        code,out=self.query("POST","/api/workspace/analyze",req)
+        self.assertEqual(code,201)
+        self.assertEqual(out["status"],"REVIEW")
+        self.assertIn("listing_truth",out["analysis"])
+        self.assertIn("image_analysis",out["analysis"])
+        self.assertNotIn("base64",json.dumps(out))
+        self.assertEqual(out["analysis"]["assessment"]["decision"],"REVIEW")
+
+    def test_user_selected_local_snapshot_import(self):
+        snapshot=json.loads(feed())
+        code,result=self.query("POST","/api/workspace/radar/import-local",{
+            "snapshot":snapshot})
+        self.assertEqual(code,200)
+        self.assertIn(result["status"],{"IMPORTED_GUIDE_ONLY","UNCHANGED"})
+        self.assertTrue(result["commercial_data_rights_not_established"])
+        code,error=self.query("POST","/api/workspace/radar/import-local",{
+            "source_url":"https://random.example/evil"})
+        self.assertEqual(code,422)
 
     def test_cross_origin_requests_cannot_write(self):
         code,doc=self.query("POST","/api/workspace/listings",{
