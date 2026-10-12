@@ -85,6 +85,18 @@ def sample_rows():
 
 
 class Rows(unittest.TestCase):
+    def test_reverse_holo_and_set_name_fallbacks(self):
+        prices = {'priceGuides': [{'idProduct': 5, 'trend': 10, 'trend-holo': 12}]}
+        singles = {'products': [{'idProduct': 5, 'name': 'Pikachu', 'idExpansion': 77}]}
+        sealed = {'products': [{'idProduct': 6, 'name': 'Terastal Festival Booster Box', 'idExpansion': 77},
+                               {'idProduct': 7, 'name': 'Terastal Festival Booster', 'idExpansion': 77}]}
+        cards = {(5, ''): {'name': 'Pikachu', 'no': '025/165', 'tp': 9, 'tp_sub': ['Normal', 'Holofoil']}}
+        rows = d.build_rows(prices, singles, sealed, cards, {})
+        rh = [r for r in rows if r['k'] == '5h'][0]
+        self.assertEqual((rh['no'], rh['_c']['tp_sub']), ('025/165', ['Reverse Holofoil']))
+        self.assertEqual(rows[0]['s'], 'Terastal Festival')
+        self.assertEqual(cards[(5, '')]['tp_sub'], ['Normal', 'Holofoil'])  # source mapping untouched
+
     def test_build(self):
         rows = sample_rows()
         self.assertEqual([r['k'] for r in rows], ['733794', '9'])  # RH trend 1.5 < €2 dropped

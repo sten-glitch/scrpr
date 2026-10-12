@@ -180,8 +180,25 @@ def _v(x):
     return x if isinstance(x, (int, float)) and x > 0 else None
 
 
+SEALED_SUFFIX = re.compile(r'\s+(Booster Box|Booster Display|Display|Booster Bundle|Booster Pack|Sleeved Booster|Booster|'
+                           r'Elite Trainer Box|Build & Battle.*|Blister.*|Collection.*|Bundle|Tin.*)$', re.I)
+
+
+def sealed_set_names(products):
+    """Set names guessed from sealed product names ("Surging Sparks Booster Box" -> "Surging Sparks")."""
+    votes = {}
+    for p in products:
+        m = SEALED_SUFFIX.search(p['name'])
+        name = p['name'][:m.start()].strip() if m else ''
+        if name:
+            v = votes.setdefault(p['idExpansion'], {})
+            v[name] = v.get(name, 0) + 1
+    return {e: sorted(v.items(), key=lambda kv: (-kv[1], len(kv[0])))[0][0] for e, v in votes.items()}
+
+
 def build_rows(prices, singles, sealed, cards, exp):
     pg = {g['idProduct']: g for g in prices['priceGuides']}
+    exp = {**sealed_set_names((sealed or {}).get('products', [])), **exp}  # TCGdex names win
     rows = []
     for p in singles['products']:
         g = pg.get(p['idProduct'])
@@ -191,7 +208,10 @@ def build_rows(prices, singles, sealed, cards, exp):
             trend = _v(g.get('trend' + sfx))
             if trend is None or trend < 2:  # under €2 is noise for investing
                 continue
-            c = cards.get((p['idProduct'], sfx), {})
+            c = cards.get((p['idProduct'], sfx))
+            if c is None and sfx:  # reverse holo shares the card's identity; TCGplayer keeps it as its own subtype
+                c = {**cards[(p['idProduct'], '')], 'tp_sub': ['Reverse Holofoil']} if (p['idProduct'], '') in cards else None
+            c = c or {}
             rows.append({
                 'k': f"{p['idProduct']}{'h' if sfx else ''}", 'id': p['idProduct'], 'kind': 'single',
                 'n': c.get('name') or p['name'], 's': c.get('set') or exp.get(p['idExpansion']) or f"Expansiunea #{p['idExpansion']}",
