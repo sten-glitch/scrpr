@@ -138,6 +138,13 @@ footer{max-width:1420px;margin:0 auto;padding:20px 25px 38px;border-top:1px soli
               </select>
             </label>
           </div>
+          <label for="photoOrigin">Photograph provenance
+            <select id="photoOrigin" required>
+              <option value="real_photo">Real photograph of a physical item</option>
+              <option value="synthetic_demo">Synthetic/generated test image — not real-world accuracy</option>
+              <option value="unknown">Unconfirmed source (cannot count toward real-photo milestone)</option>
+            </select>
+          </label>
           <label for="catalogSearch">Look up catalog printing (optional)
             <input id="catalogSearch" maxlength="120" autocomplete="off" placeholder="Search name, number or ID…">
           </label>
