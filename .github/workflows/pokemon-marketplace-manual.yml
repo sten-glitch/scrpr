@@ -1,0 +1,79 @@
+name: Pokémon Marketplace — manual discovery and optional AI Vision
+
+on:
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: eBay regions to scan
+        type: choice
+        required: true
+        default: EBAY_DE,EBAY_GB
+        options:
+          - EBAY_DE,EBAY_GB
+          - EBAY_DE,EBAY_GB,EBAY_US
+          - EBAY_DE,EBAY_FR,EBAY_IT,EBAY_ES,EBAY_GB,EBAY_US
+      max_offers:
+        description: Maximum unique listings to collect
+        type: choice
+        required: true
+        default: '20'
+        options: ['10', '20', '30']
+      vision_top:
+        description: Maximum model calls (0 = FREE API discovery only)
+        type: choice
+        required: true
+        default: '0'
+        options: ['0', '1', '3']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pokemon-marketplace-manual
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: pokemon-detector
+    env:
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      VISION_API_KEY: ${{ secrets.VISION_API_KEY }}
+      VISION_MODEL: gpt-4.1-mini
+      SCAN_REGIONS: ${{ inputs.regions }}
+      SCAN_MAX: ${{ inputs.max_offers }}
+      VISION_TOP: ${{ inputs.vision_top }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: tcgdex/cards-database
+          path: tcgdex
+          sparse-checkout: data
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline tests (no API expense)
+        run: |
+          python -m unittest discover -s tests -v
+          node tests/page.test.js
+      - name: Build trusted card identity index
+        run: python catalog_export.py --tcgdex ../tcgdex/data --out vision_catalog.json
+      - name: Scan eBay fixed-price listings and optionally analyze photos
+        run: |
+          python ebay_discovery.py --markets "$SCAN_REGIONS" \
+            --max-offers "$SCAN_MAX" --per-search 8 --details \
+            --catalog vision_catalog.json --vision-top "$VISION_TOP" \
+            --out artifacts/scan.json
+      - name: Upload results (do not publish seller listings to Pages)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokemon-marketplace-scan
+          path: pokemon-detector/artifacts/scan.json
+          retention-days: 7
+          if-no-files-found: warn
