@@ -77,6 +77,28 @@ class TestAlphaLogic(unittest.TestCase):
         self.assertEqual(report["listing_truth"]["status"],"REVIEW_REQUIRED")
         self.assertEqual(report["assessment"]["decision"],"REVIEW")
 
+    def test_entire_photo_reference_fallback_never_proves_card_identity(self):
+        payload=request_data(title="Charizard PSA 10")
+        matcher=unittest.mock.Mock()
+        matcher.match_observations.return_value=[]
+        matcher.match_entire_photo.return_value={
+            "status":"VISUAL_CANDIDATE",
+            "matched_identity_key":"tcgdex:fictional-1",
+            "reason":"Local photo resembles private reference, not proof",
+            "candidates":[{"identity_key":"tcgdex:fictional-1",
+                           "phash_distance":0,"orb_good_matches":25,
+                           "status":"CANDIDATE_NOT_VERIFIED"}],
+        }
+        no_contours={"kind":"single","observations":[],"uncertainties":["No card rectangle found"]}
+        with patch("local_app.combine_local_observations",return_value=no_contours):
+            report=analyze_request(payload, matcher=matcher)
+        self.assertEqual(report["visual_reference_matches"][0]["scope"],"whole_photo")
+        self.assertEqual(report["visual_reference_matches"][0]["status"],"VISUAL_CANDIDATE")
+        self.assertIsNone(report["assessment"]["roi"])
+        self.assertEqual(report["assessment"]["decision"],"REVIEW")
+        self.assertEqual(len(report["visual_evidence"]["observations"]),0)
+        matcher.match_entire_photo.assert_called_once()
+
     def test_input_guards(self):
         for payload in [
             {"title":"a","asking_eur":0,"kind":"single","images":[]},
