@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>BIGSTEN · Photo Ground Truth Lab</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#ecf2fb;background:#0b111b;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-width:320px;background:radial-gradient(circle at 90% 0,#203748 0,transparent 26%),#0b111b}
+a{color:#cae591} button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+header{margin:0 auto;max-width:1420px;padding:28px 25px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2b384b;gap:15px}
+.brand{display:flex;align-items:center;gap:13px;font-size:22px;font-weight:900;letter-spacing:.13em}
+.brand span{background:#cae591;color:#102216;font-weight:900;padding:5px 11px;border-radius:7px}
+.status{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#acbdcf}
+main{max-width:1420px;margin:auto;padding:34px 25px 64px}
+.eyebrow{color:#cae591;font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:800}
+h1{font-size:clamp(27px,4vw,43px);letter-spacing:-.045em;margin:8px 0 10px}
+.sub{color:#a0b4c9;font-size:14px;line-height:1.7;max-width:920px;margin:0 0 26px}
+.progress{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+.progress label{color:#adbed3;font-size:12px;font-weight:700}
+.track{background:#283b4a;width:100%;height:6px;border-radius:5px;overflow:hidden}
+.track>div{background:#cae591;height:100%;width:0%;transition:width .2s}
+.progress-grid{display:grid;grid-template-columns:2fr 1fr;align-items:center;gap:20px;flex:1}
+.pill{padding:7px 12px;border-radius:30px;background:#263b33;color:#cae591;font-size:12px;white-space:nowrap}
+.content{display:grid;grid-template-columns:minmax(380px,1.2fr) minmax(360px,1fr);gap:20px;align-items:start}
+.panel{border-radius:15px;border:1px solid #2b3d50;background:#141f2d;overflow:hidden}
+.panel-head{padding:19px 20px;border-bottom:1px solid #29384e;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.panel-head strong{font-size:15px}
+.panel-body{padding:20px}
+button.secondary{background:#273a4d;border:1px solid #45586e;border-radius:8px;color:#f1f6fa;padding:9px 12px;font-size:12px;font-weight:750}
+button.primary{background:#cae591;color:#142118;border:0;border-radius:9px;padding:13px 16px;font-weight:850}
+button.outline{background:transparent;border:1px solid #62798c;color:#dbe5ee;padding:9px 12px;font-size:12px;border-radius:7px}
+button.secondary:hover,button.outline:hover{background:#31485d}
+button.primary:hover{background:#e0fcae}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+.photo-frame{position:relative;background:#091017;border-radius:11px;min-height:300px;display:grid;place-items:center;user-select:none;touch-action:none;overflow:hidden;border:1px solid #2f4152}
+.photo-frame img{max-width:100%;max-height:68vh;display:block;width:auto;height:auto;pointer-events:none}
+.box-selection{position:absolute;border:2px solid #cae591;background:rgba(202,229,145,.11);pointer-events:none;display:none}
+.photo-msg{text-align:center;color:#8a9eb1;font-size:14px;padding:42px}
+.picture-help{font-size:12px;line-height:1.65;color:#9aafc5;margin:11px 0 0}
+.image-file{font-size:12px;color:#c0d4e6;overflow-wrap:anywhere;font-weight:750}
+kbd{font:inherit;font-size:11px;background:#213145;border:1px solid #3c5469;padding:3px 6px;border-radius:4px}
+label{font-size:12px;font-weight:700;color:#b9cada;display:flex;flex-direction:column;gap:7px;margin:0 0 15px}
+input,textarea,select{border:1px solid #3b4e61;background:#0b1420;color:#ecf4ff;border-radius:9px;padding:11px 12px;width:100%;min-width:0;outline:none}
+input:focus,textarea:focus,select:focus{border-color:#cae591;box-shadow:0 0 0 2px #cae59122}
+input::placeholder,textarea::placeholder{color:#6a8299}
+textarea{resize:vertical;min-height:82px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.caption{font-size:12px;color:#98acc2;line-height:1.65;margin:0 0 16px}
+.check{display:flex;flex-direction:row;align-items:flex-start;gap:10px;padding:12px;border:1px solid #49586a;background:#233042;border-radius:9px;margin:16px 0}
+.check input{width:17px;height:17px;flex:0 0 auto;margin:2px}
+.check span{line-height:1.5}
+.alert{background:#3b252a;border:1px solid #8e5761;color:#ffcfd1;padding:12px;border-radius:9px;font-size:13px;line-height:1.55;margin-bottom:14px}
+.success{background:#173c30;border:1px solid #4d8867;color:#ceffe1;padding:12px;border-radius:9px;font-size:13px;line-height:1.55;margin-bottom:14px}
+[hidden]{display:none!important}
+.list{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 15px}
+.mini{border-radius:7px;border:1px solid #3a5267;background:#253649;color:#c2d2df;padding:8px 10px;font-size:11px}
+.mini b{color:#cae591}
+.catalog-results{display:grid;gap:6px;max-height:154px;overflow:auto;margin:-7px 0 14px}
+.catalog-results button{text-align:left;background:#233249;border:1px solid #385069;color:#d8e6f3;border-radius:6px;padding:8px 10px;font-size:12px}
+.catalog-results button:hover{border-color:#b3d596}
+.small{font-size:11px;color:#8499b2;line-height:1.6}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 17px}
+.stats span{border:1px solid #374858;border-radius:7px;padding:7px 9px;color:#9eb3ca;font-size:11px}
+.stats strong{color:#f4f9fe}
+.checkbox-note{color:#c0e5ae;font-size:12px}
+footer{max-width:1420px;margin:0 auto;padding:20px 25px 38px;border-top:1px solid #283648;color:#728ba3;font-size:12px;line-height:1.7}
+@media(max-width:1000px){.content{grid-template-columns:1fr}.photo-frame img{max-height:55vh}.row{grid-template-columns:1fr}.progress-grid{grid-template-columns:1fr}.progress{align-items:flex-end}main{padding:25px 16px}header{padding:20px 16px}footer{padding:20px 16px}}
+</style>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header>
+  <div class="brand"><span>B</span> BIGSTEN</div>
+  <div class="status">Collection Intelligence / Ground Truth Lab / Local only</div>
+</header>
+<main>
+  <p class="eyebrow">P1 · Real image validation</p>
+  <h1>Build evidence, not confidence theater.</h1>
+  <p class="sub">Review authorized card photos and manually label the exact identity, category and visible crop. No AI auto-labels, no cloud upload. Your labels remain in a private local JSON file and can be evaluated on an independent held-out dataset.</p>
+  <div class="progress">
+    <div class="progress-grid">
+      <div><label id="progressLabel">Loading photo library…</label><div class="track"><div id="progressFill"></div></div></div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <a href="/api/export" class="pill" download>Export private JSON ↓</a>
+  </div>
+  <div class="content">
+    <section class="panel">
+      <div class="panel-head">
+        <strong>01 / Photo review</strong>
+        <div class="toolbar">
+          <button class="secondary" id="prev" type="button">← Previous</button>
+          <button class="secondary" id="next" type="button">Next →</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <label for="photoSelect">Choose a local photograph
+          <select id="photoSelect"><option>Loading images…</option></select>
+        </label>
+        <p id="fileName" class="image-file">—</p>
+        <div id="photoFrame" class="photo-frame">
+          <div id="emptyPhoto" class="photo-msg">Photo will appear here</div>
+          <img id="photo" alt="Private local photo being reviewed" hidden>
+          <div id="selection" class="box-selection"></div>
+        </div>
+        <p class="picture-help">Drag on the photo to draw a rectangle around one visible card. For a single card filling the whole photograph, you may leave the box empty. Binder pages with multiple cards require a separate label for each distinct card region.</p>
+        <div class="toolbar" style="margin-top:12px">
+          <button id="clearBox" class="outline" type="button">Clear bounding box</button>
+          <button id="addObject" class="outline" type="button">Label another card in this photo +</button>
+        </div>
+        <p class="small" id="bboxLabel">Bounding box: entire image (no crop)</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <strong>02 / Independent ground truth</strong>
+        <span class="pill">Human-reviewed</span>
+      </div>
+      <div class="panel-body">
+        <div class="stats" id="existingLabels"></div>
+        <form id="labelForm">
+          <div class="row">
+            <label for="caseId">Case ID
+              <input id="caseId" required maxlength="100" placeholder="photo-01-card-01">
+            </label>
+            <label for="kind">Photo category
+              <select id="kind">
+                <option value="single">Single card</option>
+                <option value="binder">Binder page</option>
+                <option value="graded">Graded slab</option>
+                <option value="lot">Collection / lot</option>
+                <option value="sealed">Sealed item</option>
+                <option value="negative">Negative / unknown item</option>
+              </select>
+            </label>
+          </div>
+          <label for="catalogSearch">Look up catalog printing (optional)
+            <input id="catalogSearch" maxlength="120" autocomplete="off" placeholder="Search name, number or ID…">
+          </label>
+          <div class="catalog-results" id="catalogResults"></div>
+          <label for="identity">Exact expected identity key
+            <input id="identity" maxlength="256" placeholder="tcgdex:... or leave empty for negative">
+          </label>
+          <p class="caption">Do not guess a printing from artwork alone. Check the physical card, foil, edition, language and label. For an item outside the indexed reference set, use Negative with a null identity.</p>
+          <div class="row">
+            <label for="reviewer">Reviewer
+              <input id="reviewer" required maxlength="100" placeholder="Your name or reviewer ID">
+            </label>
+            <label for="evidence">Independent proof/reference
+              <input id="evidence" required maxlength="200" placeholder="Inspection record ID">
+            </label>
+          </div>
+          <label for="notes">Review notes
+            <textarea id="notes" maxlength="500" placeholder="Photo angle, foil, damage, visible uncertainty…"></textarea>
+          </label>
+          <label class="check" for="confirmed">
+            <input id="confirmed" type="checkbox" required>
+            <span>I independently inspected the image and relevant identity evidence. The label is my attestation, not an output inferred by BIGSTEN.</span>
+          </label>
+          <div id="message" role="alert" hidden></div>
+          <button id="save" class="primary" type="submit" style="width:100%">Save reviewed label to private dataset →</button>
+        </form>
+        <p class="small" style="margin-top:14px">Stored locally as JSON with an image SHA-256 digest. Data is not transmitted to the public BIGSTEN site. Do not include personal details or third-party confidential material.</p>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>BIGSTEN Photo Review Lab · Single-user local research only. Human labels and test metrics are provisional. A 50-case count does not establish reliable accuracy; the evaluation must include representative real photos, unknown negatives and difficult variants.</footer>
+</body>
+</html>
