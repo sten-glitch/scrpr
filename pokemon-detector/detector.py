@@ -365,39 +365,61 @@ def ebay_lookup(cands, fx, cid, secret):
 
 
 # ---------------------------------------------------------------- CardTrader (official API v2)
-def cardtrader_best(listings):
-    """Cheapest English Near Mint/Mint listing in EUR (item only)."""
+def _as_list(x):
+    return x.get('array', []) if isinstance(x, dict) else x or []
+
+
+def cardtrader_best(listings, reverse=False):
+    """Cheapest English Near Mint/Mint raw listing in EUR (item only) from one blueprint's listings."""
     best = None
-    for lst in (listings.values() if isinstance(listings, dict) else [listings]):
-        for p in lst if isinstance(lst, list) else []:
-            ph = p.get('properties_hash') or {}
-            lang = str(ph.get('pokemon_language') or ph.get('language') or '').lower()
-            cond = str(ph.get('condition') or '')
-            price = p.get('price') or {}
-            if lang not in ('en', 'english') or cond not in ('Near Mint', 'Mint') or price.get('cents') is None:
-                continue
-            if (price.get('currency') or 'EUR') != 'EUR':
-                continue
-            v = price['cents'] / 100
-            best = v if best is None else min(best, v)
+    for p in listings if isinstance(listings, list) else []:
+        ph = p.get('properties_hash') or {}
+        lang = next((str(v).lower() for k, v in ph.items() if k.endswith('language')), '')
+        is_rev = any(v is True and 'reverse' in k for k, v in ph.items())
+        price = p.get('price') or {}
+        if (lang not in ('en', 'english', '') or ph.get('condition') not in ('Near Mint', 'Mint') or is_rev != reverse
+                or p.get('graded') or p.get('on_vacation') or price.get('cents') is None or (price.get('currency') or 'EUR') != 'EUR'):
+            continue
+        v = price['cents'] / 100
+        best = v if best is None else min(best, v)
     return best
 
 
-def cardtrader_lookup(cands, token):
-    calls, errors = 0, 0
-    for r in cands:
-        bp = r['_c'].get('ct')
-        if not bp:
-            continue
+def cardtrader_lookup(rows, cands, token):
+    """Map Cardmarket ids to CardTrader blueprints via CardTrader's own catalog, then read listings per set."""
+    ct = lambda path: get_json(CT + path, headers={'Authorization': 'Bearer ' + token})
+    games = _as_list(ct('/games'))
+    gid = next(g['id'] for g in games if 'pok' in f"{g.get('name', '')} {g.get('display_name', '')}".lower())
+    exps = [e for e in _as_list(ct('/expansions')) if e.get('game_id') == gid]
+    cm2bp, errors = {}, 0
+    for e in exps:
         try:
-            r['ct'] = cardtrader_best(get_json(f'{CT}/marketplace/products?blueprint_id={bp}',
-                                               headers={'Authorization': 'Bearer ' + token}))
-            calls += 1
-        except Exception as e:
+            for b in _as_list(ct(f'/blueprints/export?expansion_id={e["id"]}')):
+                ids = b.get('card_market_ids') or []
+                for cm in ids if isinstance(ids, list) else [ids]:
+                    cm2bp[int(cm)] = (b['id'], e['id'])
+        except Exception as ex:
             errors += 1
-            log(f'  CardTrader {bp}: {e}')
-        time.sleep(1.1)  # documented limit for this endpoint: ~1 request/second
-    return {'calls': calls, 'errors': errors}
+            log(f'  CardTrader set {e.get("id")}: {ex}')
+        time.sleep(0.06)  # stay under 200 requests per 10 s
+    wanted = {cm2bp[r['id']][1] for r in cands if r['id'] in cm2bp}
+    by_exp = {}
+    for r in rows:  # every row in a fetched set gets a price, not only the candidates
+        if r['kind'] == 'single' and r['id'] in cm2bp and cm2bp[r['id']][1] in wanted:
+            by_exp.setdefault(cm2bp[r['id']][1], []).append(r)
+    prices = 0
+    for exp_id, rs in by_exp.items():
+        try:
+            data = ct(f'/marketplace/products?expansion_id={exp_id}&language=en')
+            for r in rs:
+                bp = cm2bp[r['id']][0]
+                r['ct'] = cardtrader_best(data.get(str(bp)) or data.get(bp) or [], reverse=r['v'] == 'Reverse Holo')
+                prices += r['ct'] is not None
+        except Exception as ex:
+            errors += 1
+            log(f'  CardTrader listings {exp_id}: {ex}')
+        time.sleep(1.1)  # marketplace endpoint: ~1 request/second
+    return {'game': gid, 'sets': len(exps), 'linked': len(cm2bp), 'checked': len(by_exp), 'prices': prices, 'errors': errors}
 
 
 # ---------------------------------------------------------------- output
@@ -498,10 +520,12 @@ def main(argv=None):
     log('eBay:', sources['eBay DE/FR/IT/ES/UK/US'])
     if os.environ.get('CARDTRADER_TOKEN'):
         try:
-            st = cardtrader_lookup(cands, os.environ['CARDTRADER_TOKEN'])
-            sources['CardTrader'] = {'status': 'ok' if st['calls'] else 'eroare', 'at': day, 'note': f"{st['calls']} cărți, {st['errors']} erori"}
+            st = cardtrader_lookup(rows, cands, os.environ['CARDTRADER_TOKEN'])
+            sources['CardTrader'] = {'status': 'ok' if st['prices'] else 'eroare', 'at': day,
+                                     'note': f"joc {st['game']}, {st['sets']} seturi, {st['linked']} cărți legate, {st['checked']} seturi verificate, "
+                                             f"{st['prices']} prețuri, {st['errors']} erori"}
         except Exception as e:
-            sources['CardTrader'] = {'status': 'eroare', 'note': str(e)[:200]}
+            sources['CardTrader'] = {'status': 'eroare', 'note': f'{type(e).__name__}: {e}'[:200]}
     else:
         sources['CardTrader'] = {'status': 'lipsă cheie', 'note': 'adaugă CARDTRADER_TOKEN'}
     log('CardTrader:', sources['CardTrader'])

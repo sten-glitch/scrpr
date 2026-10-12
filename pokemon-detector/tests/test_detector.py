@@ -146,12 +146,31 @@ class Costs(unittest.TestCase):
         self.assertFalse(d.number_re({'local': '006', 'no': '006/165'}).search('Charmander 106/165'))
         self.assertTrue(d.number_re({'local': 'SWSH050', 'no': 'SWSH050'}).search('promo swsh050 pikachu'))
 
-    def test_cardtrader(self):
-        data = {'261377': [
-            {'price': {'cents': 9000, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Played', 'pokemon_language': 'en'}},
-            {'price': {'cents': 11000, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Near Mint', 'pokemon_language': 'en'}},
-            {'price': {'cents': 10500, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Near Mint', 'pokemon_language': 'jp'}}]}
-        self.assertEqual(d.cardtrader_best(data), 110.0)
+    def test_cardtrader_best(self):
+        nm = lambda cents, **ph: {'price': {'cents': cents, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Near Mint', 'pokemon_language': 'en', **ph}}
+        lst = [{'price': {'cents': 9000, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Played', 'pokemon_language': 'en'}},
+               nm(11000), nm(10500, pokemon_language='jp'), nm(8000, pokemon_reverse=True), {**nm(7000), 'graded': True}]
+        self.assertEqual(d.cardtrader_best(lst), 110.0)
+        self.assertEqual(d.cardtrader_best(lst, reverse=True), 80.0)
+
+    def test_cardtrader_lookup(self):
+        rows = sample_rows()
+        api = {
+            '/games': {'array': [{'id': 1, 'name': 'Magic'}, {'id': 5, 'name': 'Pokemon', 'display_name': 'Pokémon'}]},
+            '/expansions': [{'id': 10, 'game_id': 5}, {'id': 11, 'game_id': 1}],
+            '/blueprints/export?expansion_id=10': [{'id': 261377, 'card_market_ids': [733794]}],
+            '/marketplace/products?expansion_id=10&language=en': {'261377': [
+                {'price': {'cents': 9900, 'currency': 'EUR'}, 'properties_hash': {'condition': 'Near Mint', 'pokemon_language': 'en'}}]},
+        }
+        old_get, old_sleep = d.get_json, d.time.sleep
+        d.get_json = lambda url, **kw: api[url[len(d.CT):]]
+        d.time.sleep = lambda s: None
+        try:
+            st = d.cardtrader_lookup(rows, rows[:1], 'tok')
+        finally:
+            d.get_json, d.time.sleep = old_get, old_sleep
+        self.assertEqual(rows[0]['ct'], 99.0)
+        self.assertEqual((st['game'], st['sets'], st['linked'], st['checked'], st['prices'], st['errors']), (5, 1, 1, 1, 1, 0))
 
 
 class History(unittest.TestCase):
