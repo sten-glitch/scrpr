@@ -15,6 +15,15 @@ commercial licensing. Reverify source versions at every release.
 | jaredwins99/pokemon-tcg-scanner | Binder/scan ideas | No clear repo-root license identified | NO CODE COPIED | Request explicit license/permission before reusing source |
 | clawdr/pokemon-scanner | Deal alert architecture inspiration | No clear repo-root license identified | NO CODE COPIED | No reuse without permission and independent API rights |
 
+## Public research picture datasets (source metadata, not sublicensed Pokémon IP)
+
+- Roboflow Pokémon card detector: https://universe.roboflow.com/tcg-card-dectector/pokemon-card-detector-gksmy (494 published images; dataset page CC BY 4.0).
+- Roboflow Pokémon card binder: https://universe.roboflow.com/cardbinder/pokemon-card-binder (36 published images; dataset page CC BY 4.0).
+- Roboflow Pokémon Scanner: https://universe.roboflow.com/pokemon-card-detection-a3etk/pokemon-scanner-bzqii (1,239 published images; dataset page CC BY 4.0).
+- Wikimedia Commons Pokémon Trading Card Game category: each individual image has separate rights and attribution; the 24 listed files include logos/event photos, not all individual card photographs.
+
+These are potential research inputs to local card-*detection* tests, not proof of individually licensed underlying artwork, authentic card identities, independent test distributions or commercial resale permissions. All actual image exports remain in gitignored private directories. See WEB_IMAGE_DATASETS.md for provenance-aware import.
+
 ## Separate source/content rights
 
 - MIT/Apache copyright grants for software do not automatically authorize
