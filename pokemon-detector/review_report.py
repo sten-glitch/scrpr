@@ -102,6 +102,21 @@ def render_report(result: dict, *, photo_dir: str | None = None) -> str:
             html_out.append(f"<p><a href='{esc(link)}' rel='noopener noreferrer' target='_blank'>Deschide anunțul original</a></p>")
     html_out.append("<p class='warn'>Fotografiile singure nu pot confirma gradarea, autenticitatea, volumul real al lotului sau vânzările comparabile.</p>")
     html_out.append("</section>")
+    truth = result.get("listing_truth") or {}
+    if truth:
+        findings = truth.get("findings") or []
+        html_out.append("<h2>Listing Truth Engine — afirmații vs dovezi</h2><section class='card'>")
+        html_out.append(f"<p><strong>{esc(truth.get('status','REVIEW_REQUIRED'))}</strong> · Fotografiile nu sunt dovadă de autenticitate sau certificare.</p>")
+        if findings:
+            html_out.append("<table><thead><tr><th>Afirmație</th><th>Verdict</th><th>Explicație</th><th>Fotografii</th></tr></thead><tbody>")
+            for entry in findings[:35]:
+                if not isinstance(entry, dict):
+                    continue
+                html_out.append(f"<tr><td>{esc(entry.get('claim'))}</td><td>{esc(entry.get('status'))}</td><td>{esc(entry.get('explanation'))}</td><td>{esc(entry.get('image_indices'))}</td></tr>")
+            html_out.append("</tbody></table>")
+        else:
+            html_out.append("<p>Nu există afirmații din titlu/descriere ce pot fi comparate sistematic.</p>")
+        html_out.append("</section>")
     html_out.append("<h2>Fotografii și observații AI</h2><div class='grid'>")
     for entry in manifest:
         idx = entry.get("index")
