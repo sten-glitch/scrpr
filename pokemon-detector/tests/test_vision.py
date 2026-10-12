@@ -96,6 +96,23 @@ class TestVisualIntelligence(unittest.TestCase):
         key, _ = resolve_catalog_id(n, CAT)
         self.assertIsNone(key)
 
+    def test_sealed_catalog_identity_is_not_authentication(self):
+        x = normalize_observation(obs(name="151 Booster Bundle", set="151",
+                                      number=None, finish="unknown",
+                                      language="unknown", condition="sealed"), 2)
+        trusted = [{"kind":"sealed", "identity_key":"cardmarket:sealed:555",
+                    "name":"151 Booster Bundle", "set":"151"}]
+        self.assertEqual(resolve_catalog_id(x, trusted)[0], "cardmarket:sealed:555")
+        assessed = analyze_listing(listing(kind="sealed"), trusted,
+            observation=vision(kind="sealed", observations=[{
+                **obs(name="151 Booster Bundle", set="151", number=None,
+                      finish="unknown", language="unknown", condition="sealed"),
+                "authenticity_confidence": 1.0, "sold_comps":[{"price_eur":900}],
+            }]), asof=TODAY)
+        self.assertEqual(assessed["assessment"]["decision"], "REVIEW")
+        self.assertEqual(assessed["assessment"]["items"][0]["identity_key"], "cardmarket:sealed:555")
+        self.assertIsNone(assessed["assessment"]["roi"])
+
     def test_missing_variant_or_multiple_matching_rows_is_ambiguous(self):
         n = normalize_observation(obs(finish="unknown"), 2)
         self.assertIsNone(resolve_catalog_id(n, CAT)[0])
