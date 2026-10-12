@@ -146,22 +146,29 @@ def _request_json(url: str) -> dict:
     return data
 
 
-def discover_commons(limit=50) -> list[dict]:
-    """Find photo candidates with attribution metadata, without auto-labeling.
+def discover_commons(limit=50, *, search=None) -> list[dict]:
+    """Discover licensed-photo candidates via official Commons API.
 
-    Wikimedia Commons CC licenses cover the photograph to the extent
-    represented by its uploader, not necessarily embedded copyrighted art.
+    Search is opt-in, file-namespace-limited and must not be mistaken for
+    a labeled dataset. Only the first official API page is inspected.
     """
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
         raise PhotoSourceError("Commons limit must be 1..50")
     q = {
         "action": "query", "format": "json",
-        "generator": "categorymembers",
-        "gcmtitle": "Category:Pokémon Trading Card Game",
-        "gcmtype": "file", "gcmlimit": "max",
         "prop": "imageinfo", "iiprop": "url|size|extmetadata",
         "iiurlwidth": "1024",
     }
+    if search is not None:
+        if not isinstance(search,str) or not 3<=len(search.strip())<=100:
+            raise PhotoSourceError("Commons search must be between 3 and 100 characters")
+        q.update({"generator":"search",
+                  "gsrsearch":search.strip(),
+                  "gsrnamespace":"6","gsrlimit":"50"})
+    else:
+        q.update({"generator":"categorymembers",
+                  "gcmtitle":"Category:Pokémon Trading Card Game",
+                  "gcmtype":"file","gcmlimit":"max"})
     url = COMMONS_API + "?" + urllib.parse.urlencode(q)
     payload = _request_json(url)
     pages = (payload.get("query") or {}).get("pages") or {}
@@ -226,7 +233,7 @@ def _safe_image_download(url: str) -> bytes:
     return raw
 
 
-def import_commons(max_images=12, root="private/web-research/commons", *, dry_run=False):
+def import_commons(max_images=12, root="private/web-research/commons", *, dry_run=False, search=None):
     """Store only reviewed-license photo candidates with machine attribution.
 
     Does NOT automatically count toward benchmark. The selected images may
@@ -234,7 +241,7 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
     """
     if isinstance(max_images, bool) or not 1 <= max_images <= 50:
         raise PhotoSourceError("max_images must be 1..50")
-    candidates = discover_commons(limit=50)
+    candidates = discover_commons(limit=50, search=search)
     dst = Path(root).expanduser().resolve()
     if not dry_run:
         if dst.exists() and any(dst.iterdir()):
@@ -268,6 +275,8 @@ def import_commons(max_images=12, root="private/web-research/commons", *, dry_ru
     meta = {
         "source": "Wikimedia Commons",
         "source_registry": SOURCES["commons"],
+        "search_query":search,
+        "manual_card_presence_review_required":True,
         "imported_at_utc": now_iso(),
         "license_disclaimer": (
             "Per-file photo license does not automatically authorize commercial "
@@ -412,6 +421,7 @@ def main(argv=None):
     commons.add_argument("--max-images", type=int, default=12)
     commons.add_argument("--out", default="private/web-research/commons")
     commons.add_argument("--dry-run", action="store_true")
+    commons.add_argument("--search", help="Optional Wikimedia file search instead of the Pokémon TCG category")
     previews = commands.add_parser("previews", help="Fetch three public dataset thumbnail examples without API key")
     previews.add_argument("--out",default="private/web-research/roboflow-previews")
     previews.add_argument("--dry-run",action="store_true")
@@ -422,7 +432,7 @@ def main(argv=None):
     if a.command == "sources":
         result = SOURCES
     elif a.command == "commons":
-        result = import_commons(a.max_images, a.out, dry_run=a.dry_run)
+        result = import_commons(a.max_images, a.out, dry_run=a.dry_run,search=a.search)
     elif a.command == "previews":
         result = import_roboflow_public_previews(a.out,dry_run=a.dry_run)
     else:
