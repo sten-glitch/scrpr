@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from detector import _str, parse_card, parse_set
+from detector import parse_card, parse_set, CM, get_json, sealed_set_names
 
 VARIANT = {"normal": "normal", "holo": "holo", "reverse": "reverse"}
 
@@ -54,12 +54,35 @@ def export_catalog(root: str | Path) -> list[dict]:
     return entries
 
 
+def export_sealed_products(products: list[dict]) -> list[dict]:
+    """Catalog *identity only*; never treats product name as seal authentication."""
+    names = sealed_set_names(products)
+    result = []
+    for p in products:
+        pid, name = p.get("idProduct"), p.get("name")
+        if not isinstance(pid, int) or not isinstance(name, str) or not name.strip():
+            continue
+        result.append({
+            "identity_key": f"cardmarket:sealed:{pid}", "kind": "sealed",
+            "name": name.strip(), "set": names.get(p.get("idExpansion")) or "",
+            "cardmarket_id": pid,
+        })
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tcgdex", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--include-sealed", action="store_true", help="Download public Cardmarket sealed product catalog")
     args = ap.parse_args()
     result = export_catalog(args.tcgdex)
+    if args.include_sealed:
+        try:
+            data = get_json(f"{CM}/productList/products_nonsingles_6.json")
+            result.extend(export_sealed_products(data.get("products", [])))
+        except Exception as exc:
+            print(f"Warning: sealed products unavailable ({type(exc).__name__}); continuing with singles")
     if not result:
         raise SystemExit("TCGdex data missing or no usable variants")
     path = Path(args.out)
