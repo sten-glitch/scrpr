@@ -9,6 +9,7 @@
   const error = byId("error");
   let urls = [];
   let lastResult = null;
+  let lastPayload = null;
 
   const labels = {
     CONFLICT_DETECTED: "Conflict detected",
@@ -83,6 +84,7 @@
     byId("empty").hidden = true;
     byId("results").hidden = false;
     byId("download").hidden = false;
+    byId("saveToWorkspace").hidden = false;
 
     const truth = data.listing_truth || {};
     const counts = truth.counts || {};
@@ -209,6 +211,8 @@
     event.preventDefault();
     clearError();
     analyzeBtn.disabled = true;
+    lastPayload = null;
+    byId("saveToWorkspace").hidden = true;
     analyzeBtn.textContent = "Analyzing locally…";
     try {
       const files = Array.from(imagesInput.files || []);
@@ -244,12 +248,46 @@
       });
       const parsed = await res.json();
       if (!res.ok) throw new Error(parsed.error || "Could not analyze the listing.");
+      lastPayload = payload;
       render(parsed);
     } catch (err) {
       showError(err && err.message ? err.message : err);
     } finally {
       analyzeBtn.disabled = false;
       analyzeBtn.textContent = "Analyze evidence →";
+    }
+  });
+
+  byId("saveToWorkspace").addEventListener("click", async () => {
+    if (!lastPayload || !lastResult) {
+      showError("Analyze a listing before saving it.");
+      return;
+    }
+    const button = byId("saveToWorkspace");
+    button.disabled = true;
+    button.textContent = "Saving review…";
+    clearError();
+    try {
+      // The server repeats analysis independently; client-side reports are
+      // not trusted as evidence. Photos are temporary, never stored as blobs.
+      const res = await fetch("/api/workspace/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...lastPayload, source: "manual",
+        }),
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Could not save the review");
+      button.textContent = "Saved to private Pipeline ✓";
+      button.disabled = true;
+      lastPayload = null;
+    } catch (err) {
+      showError(err && err.message ? err.message : String(err));
+      button.textContent = "Save to Pipeline →";
+      button.disabled = false;
     }
   });
 
