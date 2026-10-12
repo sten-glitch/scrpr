@@ -58,8 +58,10 @@ the app still runs OpenCV rectangle detection; OCR names/numbers stay unknown.
 The local_cv engine is intentionally provisional: it finds card-like
 quadrilaterals, tries to read visible name and number, but does NOT confidently
 determine exact set/foil, edition, grading, authenticity or rarity. Boxes can
-be missed, duplicated or mistaken for sleeve/packaging. A complete graded
-identification or image-indexed pHash/ORB matching is **future work**.
+be missed, duplicated or mistaken for sleeve/packaging. Full certified
+grade/foil identification remains future work. An OPTIONAL local pHash/ORB
+reference-image matcher is now available, but requires your own legally
+usable reference-photo index and does not authenticate a physical card.
 
 ## 3. Optional TCGdex metadata-only identity index
 
@@ -73,6 +75,21 @@ checkout, export a local JSON catalog:
 Card printing, number, language and finish must ALL match before an exact
 identity can be attached. A fuzzy match or OCR guess is never enough.
 Do not automatically rehost copyrighted card artwork.
+
+### Optional private image-reference index (no AI subscription)
+
+See [PRIVATE_REFERENCE_MATCHING.md](PRIVATE_REFERENCE_MATCHING.md) for the
+manifest format, private photo rights requirements, local SQLite index
+builder, Windows commands, and held-out accuracy benchmark.
+
+After building your own index, run:
+
+    .venv\Scripts\python.exe local_app.py --port 8765 --catalog vision_catalog.json --reference-index private/card_references.sqlite
+
+The UI shows pHash + ORB candidates separately from catalog/text suggestions.
+A reference match never becomes verified identity or a valid buy recommendation
+on its own. A single card close-up can be compared as a whole photograph if
+no card contour is detected, with this fact noted explicitly.
 
 ## 4. Use the interface
 
