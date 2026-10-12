@@ -33,7 +33,11 @@
           "verified": true,
           "source_url": "https://example.org/sold/1",
           "sold_at": "2026-10-10",
-          "match_confidence": 0.97
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-1",
+          "reviewed_at": "2026-10-11"
         },
         {
           "identity_key": "sv03.5-199-en-holo-raw-nm",
@@ -44,7 +48,11 @@
           "verified": true,
           "source_url": "https://example.org/sold/2",
           "sold_at": "2026-10-10",
-          "match_confidence": 0.97
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-2",
+          "reviewed_at": "2026-10-11"
         },
         {
           "identity_key": "sv03.5-199-en-holo-raw-nm",
@@ -55,7 +63,11 @@
           "verified": true,
           "source_url": "https://example.org/sold/3",
           "sold_at": "2026-10-10",
-          "match_confidence": 0.97
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-3",
+          "reviewed_at": "2026-10-11"
         },
         {
           "identity_key": "sv03.5-199-en-holo-raw-nm",
@@ -66,7 +78,11 @@
           "verified": true,
           "source_url": "https://example.org/sold/4",
           "sold_at": "2026-10-10",
-          "match_confidence": 0.97
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-4",
+          "reviewed_at": "2026-10-11"
         },
         {
           "identity_key": "sv03.5-199-en-holo-raw-nm",
@@ -77,7 +93,11 @@
           "verified": true,
           "source_url": "https://example.org/sold/5",
           "sold_at": "2026-10-10",
-          "match_confidence": 0.97
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-5",
+          "reviewed_at": "2026-10-11"
         }
       ]
     }
