@@ -248,7 +248,7 @@ def pick_candidates(rows, n_score=100, n_mom=50, lo=20, hi=2000):
     pool = [r for r in rows if r['kind'] == 'single' and r['no'] and r['_c'].get('name') and lo <= r['tr'] <= hi]
     for r in pool:
         r['_m'] = metrics(r)
-    pool = [r for r in pool if r['_m']['liq'] >= 2]
+    pool = [r for r in pool if r['_m']['liq'] >= 2 and not (r.get('us') and max(r['tr'] / r['us'], r['us'] / r['tr']) > 3)]  # skip likely mismatches
     top = sorted(pool, key=lambda r: -r['_m']['score'])[:n_score]
     mom = sorted([r for r in pool if (r['_m']['mom'] or 0) >= 0.1], key=lambda r: -r['_m']['mom'])[:n_mom]
     seen, out = set(), []

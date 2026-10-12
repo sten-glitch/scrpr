@@ -206,7 +206,7 @@ aside.detail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px)
       <dt>CardTrader (UE)</dt><dd>Cea mai ieftină ofertă în engleză, Near Mint sau Mint, din API-ul oficial. Fără transport.</dd>
       <dt>eBay DE, FR, IT, ES, UK, SUA</dt><dd>Anunțuri „Cumpără acum” prin API-ul oficial, verificate după numărul cărții, doar exemplare în engleză, fără gradate sau loturi. Prețul „adus în RO” include transportul spre România și, pentru UK și SUA, TVA de import 21%, taxa vamală de €3 și taxa de 25 lei (colete sub €150). Sunt prețuri cerute, nu vânzări.</dd>
       <dt>TCGplayer (SUA)</dt><dd>Prețul de piață din copia publică zilnică tcgcsv.com, convertit la cursul BCE. Arată unde SUA plătește mai mult; vânzarea spre SUA are tarife și transport mare, deci e doar informativ.</dd>
-      <dt>ROI net max</dt><dd><code>(min(trend, medie 7z) × (1 − comision) − 1 €) ÷ cea mai ieftină cumpărare − 1</code>. Cumpărarea cea mai ieftină dintre Cardmarket, CardTrader și eBay. Cumpărările sub 25% din preț sunt „suspecte” și scoase din clasament.</dd>
+      <dt>ROI net max</dt><dd><code>(min(trend, medie 7z) × (1 − comision) − 1 €) ÷ cea mai ieftină cumpărare − 1</code>. Cumpărarea cea mai ieftină dintre Cardmarket, CardTrader și eBay. Cumpărările sub 25% din preț, cărțile la care Cardmarket și TCGplayer diferă de peste 3 ori și salturile de peste +150% sunt marcate și, primele două, scoase din clasament (le vezi cu „Arată ofertele suspecte”).</dd>
       <dt>Momentum și accelerare</dt><dd><code>medie 7z ÷ medie 30z − 1</code> și <code>medie 24h ÷ medie 7z − 1</code>, din vânzările reale de pe Cardmarket.</dd>
       <dt>Scor general</dt><dd>0–100: 40 puncte ROI (saturat la 100%), 30 momentum (±40%), 15 accelerare (±30%), 15 lichiditate.</dd>
       <dt>Limite</dt><dd>Prețul celei mai ieftine oferte Cardmarket include orice limbă și stare. eBay are doar prețuri cerute. Un semnal nu e o recomandare de cumpărare și nu e sfat financiar: deschide oferta înainte de bani.</dd>
@@ -235,8 +235,10 @@ function metrics(r, cfg) {
   if (r.eb) routes.push({ m: EB_NAMES[r.eb.m] || 'eBay', buy: r.eb.landed, url: r.eb.url, note: 'din ' + (r.eb.from || '?') + (r.eb.shipGuess ? ', transport estimat' : '') });
   for (const x of routes) { x.roi = sellNet / x.buy - 1; x.suspect = x.buy < 0.25 * ref }
   const ok = routes.filter(x => !x.suspect).sort((a, b) => a.buy - b.buy);
-  const best = ok[0] ?? null, roi = best ? best.roi : null, suspect = routes.length > 0 && !ok.length;
+  const best = ok[0] ?? null, roi = best ? best.roi : null;
   const us = r.us != null ? r.us / r.tr - 1 : null;
+  const diverge = r.us != null && (r.tr / r.us > 3 || r.us / r.tr > 3);  // usually a different printing or a freak sale
+  const suspect = (routes.length > 0 && !ok.length) || diverge;
   const score = clamp(40 * clamp(roi ?? 0, 0, 1) + 30 * clamp((mom ?? 0) / 0.4, -1, 1) + 15 * clamp((acc ?? 0) / 0.3, -1, 1) + 15 * liq / 3, 0, 100);
   const sig = [];
   if (r.kind === 'single') {
@@ -245,10 +247,12 @@ function metrics(r, cfg) {
     if (lag != null && lag >= 0.10) sig.push(['Trend în urmă', 'acc', 'Media pe 7 zile e cu ' + pct(lag) + ' peste trend: ofertele ancorate în trend sunt ieftine.']);
     if (mom != null && mom <= -0.15) sig.push(['Scade', 'down', 'Vânzările din ultima săptămână sunt cu ' + pct(-mom).slice(1) + ' sub media lunii.']);
     if (liq <= 1) sig.push(['Ilichid', 'warn', 'Nicio vânzare pe Cardmarket în ultimele 7 zile.']);
+    if (mom != null && mom > 1.5) sig.push(['Salt extrem', 'warn', 'Peste +150% într-o săptămână: de obicei una-două vânzări atipice. Verifică vânzările pe Cardmarket.']);
+    if (diverge) sig.push(['Preț divergent', 'warn', 'Cardmarket și TCGplayer diferă de peste 3 ori: probabil altă versiune a cărții sau vânzări atipice.']);
   }
   if (best && roi >= 0.25) sig.push([best.m.startsWith('eBay') ? 'eBay ieftin' : best.m === 'CardTrader' ? 'CardTrader ieftin' : 'Flip ≥25%', 'up', 'Cumpărat pe ' + best.m + ' la ' + best.buy.toFixed(2) + ' € lasă ' + pct(roi) + ' ROI net vândut pe Cardmarket.']);
   if (us != null && us >= 0.3) sig.push(['Prima SUA', 'acc', 'În SUA se plătește cu ' + pct(us) + ' mai mult (TCGplayer). Vânzarea spre SUA are tarife mari.']);
-  if (suspect) sig.push(['Ofertă suspectă', 'warn', 'Toate ofertele sunt sub 25% din preț: probabil altă limbă, stare slabă sau listare greșită.']);
+  if (routes.length > 0 && !ok.length) sig.push(['Ofertă suspectă', 'warn', 'Toate ofertele sunt sub 25% din preț: probabil altă limbă, stare slabă sau listare greșită.']);
   return { liq, mom, acc, lag, ref, sellNet, routes, best, roi, suspect, us, score, sig };
 }
 

@@ -31,4 +31,10 @@ assert.deepEqual(rank(rows, 'us', f, new Set()).map(r => r.k), ['1']);
 assert.deepEqual(rank(rows, 'sealed', f, new Set()).map(r => r.k), ['3']);
 assert.deepEqual(rank(rows, 'score', { ...f, q: '199/165' }, new Set()).map(r => r.k), ['1']);
 assert.deepEqual(rank(rows, 'watch', f, new Set(['2'])).map(r => r.k), ['2']);
+// a card whose Cardmarket and US prices differ more than 3x is flagged and hidden by default
+const odd = fromCols({ cols, rows: [['9', 'single', 'Gyarados', 'Evolutions', '34/108', 'Normal', 100, 80, 101, 120, 110, 18, 7.5, null, null]] })[0];
+odd.m = metrics(odd, cfg);
+assert.ok(odd.m.suspect && odd.m.sig.some(s => s[0] === 'Preț divergent') && odd.m.sig.some(s => s[0] === 'Salt extrem'));
+assert.deepEqual(rank([odd], 'mom', f, new Set()).length, 0);
+assert.deepEqual(rank([odd], 'mom', { ...f, sus: true }, new Set()).length, 1);
 console.log('page core ok');
