@@ -122,6 +122,25 @@
       appendText(box, "p", item.explanation);
     });
 
+    const suggested = byId("candidates");
+    suggested.replaceChildren();
+    const suggestions = data.catalog_suggestions || [];
+    const populated = suggestions.filter((row) => Array.isArray(row.candidates) && row.candidates.length);
+    if (!populated.length) {
+      appendText(suggested, "p",
+        "No catalog candidate available. Add a local TCGdex metadata index and a readable card name/number. Suggestions do not prove identity.", "block-hint");
+    }
+    populated.slice(0, 12).forEach((row) => {
+      const top = row.candidates.slice(0, 3);
+      const area = appendText(suggested, "div", "", "finding");
+      appendText(area, "strong", "Observed object #" + (Number(row.observation_index) + 1));
+      top.forEach((item) => {
+        appendText(area, "p",
+          String(item.name || "Unknown") + " — " + String(item.set || "?") +
+          " #" + String(item.number || "?") + " · " + String(item.finish || "?") +
+          " · " + String(item.language || "?") + " — CANDIDATE ONLY");
+      });
+    });
     const assessment = data.assessment || {};
     let finance = "No financial evaluation: a text-only listing cannot demonstrate card identity, real comps or cost.";
     if (data.assessment) {
