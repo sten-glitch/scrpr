@@ -50,6 +50,23 @@ Keep license texts/third-party attribution when distributing their software. Rec
 Other publicly visible card-scanner repositories without an identified license are study references only, not code to copy.
 A GitHub software/data license does NOT automatically license Pokémon artwork, logos, card scans, marketplace data or third-party photographs. Keep user-owned photos private; secure appropriate permission/licensing for commercial feeds, price history, imagery, caching and derived analytics. Verify eBay-specific intended commercial use in writing before enabling any paid SaaS arbitrage pricing feature. Use BIGSTEN branding; no false official Pokémon affiliation. Engage qualified legal review before public launch.
 
+## Repository boundary before commercialization
+
+The existing sten-glitch/scrpr repository is PUBLIC. Source code in this
+draft PR, including the alpha and domain-logic design, is therefore visible
+to anyone, even if it is not an open-source license grant. Never commit
+proprietary private datasets, buyer information, receipts, model weights
+with limited distribution, keys or competitive internal roadmap details.
+Before developing customer accounts, billing and hosted proprietary modules,
+split the product into a PRIVATE BIGSTEN application repository, and leave
+scrpr as a public research/detector or demo repository. Reuse verified
+components with appropriate license notices.
+
+Commercial SaaS backend and user data must not be deployed from the public
+alpha directly. A separate private deployment and access-control review are
+release gates. Changing repository visibility alone does NOT remove prior
+publicly accessible code history.
+
 ## Security and privacy release gates
 
 Local alpha binds ONLY to localhost; no accounts, no remote hosting and no claim that its storage is multi-tenant-safe.
