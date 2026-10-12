@@ -1,12 +1,10 @@
 name: BIGSTEN public photo research audit (unlabeled)
 
-# Opt-in through changes to this isolated research workflow/script; it does
-# NOT run on each product commit or create recurring network traffic.
+# Explicit manual action only. Wikimedia limits requests, and our
+# authenticated research must never run on each PR synchronization.
+# GitHub workflow_dispatch will become available after the workflow
+# is registered on the default branch (once safely merged).
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/bigsten-public-photo-audit.yml'
-      - 'pokemon-detector/public_photo_audit.py'
   workflow_dispatch:
 
 permissions:
