@@ -122,6 +122,27 @@
       appendText(box, "p", item.explanation);
     });
 
+    const visualMatches = byId("visualMatches");
+    visualMatches.replaceChildren();
+    const matchRows = data.visual_reference_matches || [];
+    if (!matchRows.length) {
+      appendText(visualMatches, "p",
+        "No private reference index loaded, or no valid photo regions. To enable image matching, build your own rights-cleared image index locally.", "block-hint");
+    } else {
+      matchRows.slice(0, 20).forEach((match) => {
+        const area = appendText(visualMatches, "div", "", "finding");
+        appendText(area, "strong",
+          "Object #" + (Number(match.observation_index) + 1) + " — " + (match.status || "ABSTAIN"));
+        appendText(area, "p", match.reason || "Manual verification required");
+        const candidates = Array.isArray(match.candidates) ? match.candidates : [];
+        candidates.slice(0, 3).forEach((candidate) => {
+          appendText(area, "small",
+            String(candidate.identity_key || "?") + " · pHash distance " +
+            String(candidate.phash_distance) + " · ORB " +
+            String(candidate.orb_good_matches) + " — NOT VERIFIED");
+        });
+      });
+    }
     const suggested = byId("candidates");
     suggested.replaceChildren();
     const suggestions = data.catalog_suggestions || [];
