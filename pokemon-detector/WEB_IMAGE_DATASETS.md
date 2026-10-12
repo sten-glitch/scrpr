@@ -121,6 +121,58 @@ Expected export structure (publisher may vary slightly):
 
 Some exports have only valid rather than test; choose the split that exists.
 
+## B2. One-command authorized full photo dataset pilot
+
+After your Roboflow account has authorized dataset exports, the new
+run_roboflow_pilot.py combines all three steps: official provider download,
+independent TEST/VALID card-box detection benchmark, and staging of up to 50
+photos for human verification of exact printing.
+
+On Windows, first install the optional free local libraries and official
+Roboflow SDK (provider usage may be account-gated or paid):
+
+    py -3 -m venv .venv
+    .venv\Scripts\python.exe -m pip install -r requirements-local.txt
+    .venv\Scripts\python.exe -m pip install roboflow
+
+Then launch a masked temporary key prompt in a PowerShell terminal:
+
+    .\start-full-photo-benchmark.ps1 -Source detector
+
+Or use a key already set in the local environment:
+
+    .venv\Scripts\python.exe run_roboflow_pilot.py --source detector --root private/roboflow-pilot-detector
+
+Other available sources: binder and scanner. The output:
+- private/roboflow-pilot-detector/reports/detection.json
+- private/roboflow-pilot-detector/reports/detection.html
+- private/roboflow-pilot-detector/reports/pilot-summary.json
+- private/roboflow-pilot-detector/human-review/ with source photo/rights metadata
+
+The script stores no account key, refuses overwriting existing results, and
+rejects dataset roots escaping the requested private directory. No file goes
+to GitHub by default. The output evaluates **publisher-labeled rectangles**,
+NOT accurate identity, grade, authenticity, licensing rights or ROI.
+
+### Actual recent public-photo results
+
+At 2026-10-12 we processed 25 online photos using GitHub Actions
+(22 Commons and 3 public Roboflow previews), finding 14 unverified
+card-like contours in 8 images. The four file failures were Wikimedia
+HTTP 429 rate limits. Detailed report artifact:
+https://github.com/sten-glitch/scrpr/actions/runs/38282983201
+
+Looking at the source titles reveals unrelated video-game cartridges,
+Pokémon-themed QR codes, eReader hardware and vending machines among the
+candidate regions. Therefore **these detections cannot be called successful
+Pokémon card detections**. The audit now includes TITLE-ONLY review hints,
+which are explicitly not card-presence/absence ground truth.
+
+The importer now stops requesting additional Wikimedia images after
+HTTP 429; a subsequent safety run ended early, correctly respecting the
+host's rate limit:
+https://github.com/sten-glitch/scrpr/actions/runs/38283570751
+
 ## C. Test actual card detections
 
 The detection benchmark compares OpenCV card contour predictions with the
