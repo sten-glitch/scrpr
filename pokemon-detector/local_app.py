@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 
 from listing_truth import evaluate_listing_truth
 from local_cv import combine_local_observations, LocalCVError
+from reference_matcher import ReferenceMatcher, ReferenceMatchError
 from photo_inputs import MAX_TOTAL_BYTES
 from vision import analyze_listing, VisionError
 
@@ -72,7 +73,8 @@ def _decode_uploads(images):
     return result
 
 
-def analyze_request(payload: dict, catalog: list[dict] | None = None) -> dict:
+def analyze_request(payload: dict, catalog: list[dict] | None = None,
+                    matcher: ReferenceMatcher | None = None) -> dict:
     """Pure entrypoint for local UI and tests; never sends remote requests."""
     if not isinstance(payload, dict):
         raise AlphaInputError("Expected JSON object")
@@ -125,6 +127,16 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None) -> dict:
             locations.append(str(target))
         listing["image_files"]=locations
         result = analyze_listing(listing, catalog or [], observation=observation)
+    if matcher is not None:
+        try:
+            result["visual_reference_matches"] = matcher.match_observations(
+                [raw for _, raw in images], result["visual_evidence"]["observations"])
+        except (ReferenceMatchError, LocalCVError) as exc:
+            result["visual_reference_matches"] = []
+            notes.append(f"Local reference matching unavailable: {exc}")
+    else:
+        result["visual_reference_matches"] = []
+        notes.append("No private image-reference index configured; no pHash/ORB matching performed")
     result["image_analysis"] = {
         "mode": status, "images": len(images),
         "observations": len(result["visual_evidence"]["observations"]),
@@ -138,8 +150,9 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None) -> dict:
 class AlphaServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
-    def __init__(self, port: int, catalog: list[dict]):
+    def __init__(self, port: int, catalog: list[dict], matcher: ReferenceMatcher | None = None):
         self.catalog = catalog
+        self.matcher = matcher
         super().__init__(("127.0.0.1",port), AlphaHandler)
 
 
@@ -216,7 +229,7 @@ class AlphaHandler(BaseHTTPRequestHandler):
             return self._json(413,{"error":"Request too large or empty"})
         try:
             payload=json.loads(self.rfile.read(length))
-            out=analyze_request(payload,self.server.catalog)
+            out=analyze_request(payload,self.server.catalog,self.server.matcher)
             return self._json(200,out)
         except (AlphaInputError,VisionError,ValueError,TypeError) as exc:
             return self._json(422,{"error":str(exc)[:400]})
@@ -235,6 +248,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description="BIGSTEN private localhost alpha; NEVER publicly deploy")
     parser.add_argument("--port",type=int,default=8765)
     parser.add_argument("--catalog",help="Optional TCGdex catalog JSON; loaded locally")
+    parser.add_argument("--reference-index",help="Optional private user-owned pHash/ORB SQLite index")
     args=parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
         parser.error("Allowed local port range: 1024–65535")
@@ -243,7 +257,8 @@ def main(argv=None):
         catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8"))
         if not isinstance(catalog,list):
             parser.error("Catalog must be JSON array")
-    server=AlphaServer(args.port,catalog)
+    matcher=ReferenceMatcher(args.reference_index) if args.reference_index else None
+    server=AlphaServer(args.port,catalog,matcher)
     print(f"BIGSTEN local alpha: http://127.0.0.1:{args.port} (PRIVATE, no login — never expose publicly)")
     try:
         server.serve_forever()
