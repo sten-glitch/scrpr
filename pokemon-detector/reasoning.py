@@ -44,14 +44,25 @@ def _comps(item: dict, asof: dt.date, max_age_days: int = 90) -> list[dict]:
     chosen = []
     ident = item.get("identity_key")
     for c in item.get("sold_comps", []):
-        if not c.get("sold") or not c.get("verified") or not c.get("source_url"):
+        if c.get("sold") is not True or c.get("verified") is not True:
+            continue
+        # A bare 'verified: true' boolean is not evidence. Require named
+        # reviewer, transaction proof and audit date. Human verification remains
+        # an assertion until a trusted reviewer actually inspects the proof.
+        if (c.get("verification_method") != "human_attestation"
+                or not c.get("reviewer") or not c.get("proof_reference")
+                or not isinstance(c.get("source_url"), str)
+                or not c["source_url"].startswith("https://")):
             continue
         if not ident or not item.get("language") or not item.get("condition") or c.get("identity_key") != ident:
             continue
         if c.get("language") != item.get("language") or c.get("condition") != item.get("condition"):
             continue
         d = _date(c.get("sold_at"))
+        reviewed_at = _date(c.get("reviewed_at"))
         if d is None or not 0 <= (asof - d).days <= max_age_days:
+            continue
+        if reviewed_at is None or not d <= reviewed_at <= asof:
             continue
         if _prob(c.get("match_confidence", 0), "match_confidence") < 0.9:
             continue
