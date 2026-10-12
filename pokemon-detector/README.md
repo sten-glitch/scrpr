@@ -13,6 +13,12 @@
 > [Third-party rights](THIRD_PARTY_RIGHTS.md) ·
 > [Offline Photo Lab](OFFLINE_PHOTO_LAB.md) ·
 > [Sales Evidence Lab](SALES_EVIDENCE_LAB.md).
+>
+> **NEW P1:** [Private Photo Ground Truth Lab](PHOTO_REVIEW_LAB.md) — run
+> `start-photo-lab.bat` on Windows after placing permissioned photos into
+> `private/evaluation-photos`. Label card regions, exact printing and negative
+> cases locally. Benchmark with `reference_benchmark.py --html ...` to review
+> real photo errors; no real photo dataset has been added to this public repo.
 > **No provider's marketplace data or Pokémon artwork rights are assumed merely
 > because open-source code or a developer API is available.**
 
