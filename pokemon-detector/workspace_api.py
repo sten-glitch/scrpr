@@ -5,6 +5,7 @@ only be used behind local_app.py's localhost + Host + Origin checks.
 """
 from __future__ import annotations
 
+import json
 from listing_truth import evaluate_listing_truth
 from radar_ingest import fetch_own_detector_feed, import_feed
 from workspace import WorkspaceError, WorkspaceStore
@@ -60,6 +61,12 @@ def workspace_post(store: WorkspaceStore, path: str, payload: dict,
         return 200, store.purchase(listing_id,payload)
     if path == "/api/workspace/sale":
         return 200, store.sale(listing_id,payload)
+    if path == "/api/workspace/radar/import-local":
+        if set(payload) != {"snapshot"} or not isinstance(payload["snapshot"],dict):
+            raise WorkspaceError("Expected a detector snapshot JSON object, not a URL or arbitrary file path")
+        # User-selected offline snapshot; no network call or path access.
+        raw=json.dumps(payload["snapshot"],separators=(",",":"),ensure_ascii=False).encode()
+        return 200, import_feed(store,raw,limit=250)
     if path == "/api/workspace/radar/refresh":
         if payload:
             # Fixed permitted endpoint. No arbitrary URLs or source data
