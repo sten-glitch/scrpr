@@ -166,7 +166,8 @@ def _report_stats(tp,fp,fn):
 
 def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
                    max_images=400, max_cards=30, iou_threshold=.5,
-                   source="detector") -> dict:
+                   source="detector", detector=None,
+                   detector_name="opencv_contours") -> dict:
     root=Path(root).expanduser().resolve()
     if source not in ("detector","binder","scanner"):
         raise DetectionBenchmarkError("Unknown registered dataset source")
@@ -221,12 +222,28 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
             if len(boxes)>100:
                 raise DetectionBenchmarkError("Annotation contains too many objects")
             cv2,img=_checked_image(raw)
-            predicted=detect_card_boxes(cv2,img,max_cards=max_cards)
         except (OSError,ValueError) as exc:
             counters["skipped_invalid_images"]+=1
             rows.append({"image":photo.name,"status":"INVALID_NOT_COUNTED",
                          "error":str(exc)[:120]})
             continue
+        # Inference errors must FAIL the evaluation, not hide failed photos
+        # and quietly inflate a research model's apparent precision/recall.
+        try:
+            predicted=(detector(img) if detector is not None else
+                       detect_card_boxes(cv2,img,max_cards=max_cards))
+        except Exception as exc:
+            raise DetectionBenchmarkError(
+                f"{detector_name} inference failed; benchmark incomplete"
+            ) from exc
+        if not isinstance(predicted,list) or len(predicted)>max_cards:
+            raise DetectionBenchmarkError("Detector returned invalid/excessive box count")
+        for box in predicted:
+            if (not isinstance(box,(tuple,list)) or len(box)!=4
+                    or any(isinstance(x,bool) or not isinstance(x,(float,int))
+                           or not math.isfinite(x) or not 0<=x<=1 for x in box)
+                    or not box[0]<box[2] or not box[1]<box[3]):
+                raise DetectionBenchmarkError("Detector returned a malformed normalized box")
         match=match_rectangles(predicted,boxes,iou_threshold)
         counters["tp"]+=match["true_positives"]
         counters["fp"]+=match["false_positives"]
@@ -250,6 +267,7 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
         "evaluated_at":dt.datetime.now(dt.timezone.utc).isoformat(),
         "source":SOURCES[source],
         "split":split,"card_class_id":class_id,"class_names":names,
+        "detector":detector_name,
         "iou_threshold":iou_threshold,"metrics":_report_stats(counters["tp"],counters["fp"],counters["fn"]),
         "samples":counters,"cases":rows,
         "real_photo_provenance_human_verified":False,
