@@ -18,6 +18,7 @@ import html
 import json
 import math
 import re
+import time
 from pathlib import Path
 
 from local_cv import _checked_image, detect_card_boxes
@@ -196,6 +197,7 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
     counters={"tp":0,"fp":0,"fn":0,"evaluated":0,"skipped_missing_labels":0,
               "skipped_invalid_images":0,"skipped_train_duplicates":0,
               "skipped_query_duplicates":0,"zero_card_images":0}
+    inference_times=[]
     rows=[]
     seen=set()
     for photo in files:
@@ -230,8 +232,10 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
         # Inference errors must FAIL the evaluation, not hide failed photos
         # and quietly inflate a research model's apparent precision/recall.
         try:
+            start=time.perf_counter()
             predicted=(detector(img) if detector is not None else
                        detect_card_boxes(cv2,img,max_cards=max_cards))
+            inference_ms=(time.perf_counter()-start)*1000
         except Exception as exc:
             raise DetectionBenchmarkError(
                 f"{detector_name} inference failed; benchmark incomplete"
@@ -249,10 +253,13 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
         counters["fp"]+=match["false_positives"]
         counters["fn"]+=match["false_negatives"]
         counters["evaluated"]+=1
+        inference_times.append(inference_ms)
         if not boxes:
             counters["zero_card_images"]+=1
         rows.append({
-            "image":photo.name,"status":"EVALUATED_BOXES_NOT_IDENTITY",
+            "image":photo.name,"image_sha256":digest,
+            "inference_ms":round(inference_ms,3),
+            "status":"EVALUATED_BOXES_NOT_IDENTITY",
             "ground_truth_boxes":len(boxes),"predicted_boxes":len(predicted),
             "tp":match["true_positives"],"fp":match["false_positives"],
             "fn":match["false_negatives"],
@@ -268,7 +275,15 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
         "source":SOURCES[source],
         "split":split,"card_class_id":class_id,"class_names":names,
         "detector":detector_name,
-        "iou_threshold":iou_threshold,"metrics":_report_stats(counters["tp"],counters["fp"],counters["fn"]),
+        "iou_threshold":iou_threshold,
+        "inference_measurement":{
+            "mean_ms_per_image":round(sum(inference_times)/len(inference_times),3),
+            "median_ms_per_image":round(sorted(inference_times)[len(inference_times)//2],3),
+            "cold_first_prediction_included":True,
+            "hardware": "UNSPECIFIED_USER_HOST",
+            "scope":"detector call only; excludes model loading, file decoding and grading",
+        },
+        "metrics":_report_stats(counters["tp"],counters["fp"],counters["fn"]),
         "samples":counters,"cases":rows,
         "real_photo_provenance_human_verified":False,
         "human_exact_card_id_labels":False,"commercial_rights_cleared":False,
