@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import copy
 import math
 import sys
 import tempfile
@@ -194,7 +195,7 @@ class TestPairedComparison(unittest.TestCase):
         self.photo("case02","",170)
         with patch("external_detection_benchmark.detect_card_boxes",return_value=[]):
             baseline=benchmark_yolo(self.root,source="detector")
-        model_report=json.loads(json.dumps(baseline))
+        model_report=copy.deepcopy(baseline)
         model_report["cases"][0]["image"]="not-the-same-photo.jpg"
         with self.assertRaisesRegex(CompareError,"Different photos"):
             compare_reports(baseline,model_report)
