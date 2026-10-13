@@ -122,7 +122,7 @@ class RFDETRCardDetector:
         self.max_boxes=max_boxes
         if loader is None:
             try:
-                from rfdetr import RFDETR
+                from rfdetr.detr import RFDETR
             except (ImportError,RuntimeError) as exc:
                 raise RFDETRCardError(
                     "Optional RF-DETR missing. Install in a local Python "
