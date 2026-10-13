@@ -141,7 +141,7 @@ def report_html(report):
     for row in report["per_photo"][:400]:
         bits.extend(["<tr><td>",e(row["image"]),"</td><td>",e(row["publisher_ground_truth_boxes"]),
                      "</td><td>",e(f'{row["opencv_tp"]} / {row["opencv_fp"]} / {row["opencv_fn"]}'),
-                     "</td><td>",e(f'{row["rfdetr_tp"]} / {row["rfdetr_fp"]} / {row["rfdetr_fn"]'),"</td></tr>"])
+                     "</td><td>",e(f'{row["rfdetr_tp"]} / {row["rfdetr_fp"]} / {row["rfdetr_fn"]}'),"</td></tr>"])
     bits.extend(["</tbody></table><h2>Scientific limitations</h2><ul>"])
     for note in report["limitations"]:
         bits.extend(["<li>",e(note),"</li>"])
