@@ -16,6 +16,8 @@
 >
 > **NEW internet datasets:** [Public Pokémon image sources + safe import](WEB_IMAGE_DATASETS.md) — Wikimedia Commons direct research download, Roboflow official dataset export (account/API permission may be required), YOLO card-box benchmark, private holdout sampling. No dataset images are committed to GitHub.
 >
+> **NEW P1 optional model:** [RF-DETR Nano vs OpenCV](RFDETR_EXPERIMENT.md) — exact-card class fine-tune, local checkpoint only, strict paired YOLO geometry benchmark and per-image CPU/GPU timing. No generic COCO model is misrepresented as a card detector.
+>
 > **NEW P1:** [Private Photo Ground Truth Lab](PHOTO_REVIEW_LAB.md) — run
 > `start-photo-lab.bat` on Windows after placing permissioned photos into
 > `private/evaluation-photos`. Label card regions, exact printing and negative
