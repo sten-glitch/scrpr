@@ -10,6 +10,7 @@ commercial licensing. Reverify source versions at every release.
 | tcgdex/cards-database | Catalog identifiers, set and card metadata | MIT | Existing local catalog exporter | Preserve MIT copyright text; review rights to card artwork independently |
 | opencv/opencv | Local contour image analysis | Apache-2.0 | Optional local_cv.py, not bundled | Pin dependencies; notices; audit transitive binaries |
 | tesseract-ocr/tesseract | Printed text recognition | Apache-2.0 | Optional pytesseract wrapper and system binary | Ensure binary/system packaging and wrapper license review |
+| roboflow/rf-detr (RF-DETR Nano, core) | Local optional fine-tuned card rectangle detector | Apache-2.0 core code/weight designation | Adapter, trainer and benchmark implemented, NO trained model included | Preserve Apache notices; only trusted local fine-tuned checkpoints; Plus/PML models are excluded; photos and training data require separate rights |
 | rapidfuzz/RapidFuzz | Faster fuzzy text matching | MIT | NOT NEEDED: current catalog candidate suggestions use Python stdlib difflib | Optional only if profiling proves value |
 | dylan7077/viridian | Inspiration for pHash/ORB and local grading experiments | MIT | NOT VENDORED, NOT IMPORTED | Can evaluate as optional future integration; preserve notices if code copied; do NOT present experimental grade as certified |
 | jaredwins99/pokemon-tcg-scanner | Binder/scan ideas | No clear repo-root license identified | NO CODE COPIED | Request explicit license/permission before reusing source |
