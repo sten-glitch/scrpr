@@ -54,10 +54,13 @@ def compare_reports(opencv: dict, rfdetr: dict, *,
         raise CompareError("Different or empty evaluated photo sets")
     deltas=[]
     for l,r in zip(lrows,rrows):
-        if l.get("image")!=r.get("image") or l.get("ground_truth_boxes")!=r.get("ground_truth_boxes"):
-            raise CompareError("Different photos or ground-truth boxes; paired comparison invalid")
+        if (l.get("image")!=r.get("image")
+                or l.get("image_sha256")!=r.get("image_sha256")
+                or l.get("ground_truth_boxes")!=r.get("ground_truth_boxes")):
+            raise CompareError("Different photos, bytes or ground-truth boxes; paired comparison invalid")
         deltas.append({
-            "image":l["image"],"publisher_ground_truth_boxes":l["ground_truth_boxes"],
+            "image":l["image"],"image_sha256":l.get("image_sha256"),
+            "publisher_ground_truth_boxes":l["ground_truth_boxes"],
             "opencv_tp":l["tp"],"opencv_fp":l["fp"],"opencv_fn":l["fn"],
             "rfdetr_tp":r["tp"],"rfdetr_fp":r["fp"],"rfdetr_fn":r["fn"],
             "rfdetr_recall_delta_boxes":r["tp"]-l["tp"],
@@ -81,6 +84,8 @@ def compare_reports(opencv: dict, rfdetr: dict, *,
         "evaluated_photos":len(lrows),
         "checkpoint_sha256":checkpoint_sha256,
         "opencv":score(opencv),"rfdetr_nano":score(rfdetr),
+        "opencv_inference":opencv.get("inference_measurement"),
+        "rfdetr_inference":rfdetr.get("inference_measurement"),
         "per_photo":deltas,
         "same_evaluated_photos":True,
         "source_labels_independently_audited":False,
@@ -94,6 +99,7 @@ def compare_reports(opencv: dict, rfdetr: dict, *,
             "Only a fine-tuned RF-DETR model with a dedicated card class can be compared; a pretrained COCO model has no card class",
             "Test split and original source-image commercial rights require independent review",
             "Near-duplicate train/test images and tuning threshold on test can bias scores",
+            "Inference times depend on laptop hardware, CPU/GPU, cold startup, model resolution, OS and dependency versions",
             "Do not ship an experimental model just because its aggregate F1 is higher",
         ]
     }
@@ -110,6 +116,9 @@ def report_html(report):
         ("True positive boxes",report["opencv"]["tp"],report["rfdetr_nano"]["tp"]),
         ("False positive boxes",report["opencv"]["fp"],report["rfdetr_nano"]["fp"]),
         ("Missed boxes",report["opencv"]["fn"],report["rfdetr_nano"]["fn"]),
+        ("Mean detector time (ms/image)",
+         (report.get("opencv_inference") or {}).get("mean_ms_per_image"),
+         (report.get("rfdetr_inference") or {}).get("mean_ms_per_image")),
     ]
     bits=[
         "<!doctype html><html><head><meta charset='utf-8'>",
