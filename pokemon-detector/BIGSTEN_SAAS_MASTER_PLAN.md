@@ -52,6 +52,22 @@ gate therefore remains OPEN; CI success is not proof of market performance.
 
 Discovered three publicly listed Roboflow image datasets (494 card-detector, 36 binder, 1,239 scanner images; per-page CC BY 4.0 dataset terms) and a Commons category with 24 mixed media files. Built legal-source registry, optional official Roboflow SDK download requiring authorized credentials, Wikimedia Commons metadata/license-driven importer, YOLO card-box IoU benchmark, and private export-to-human-review sampling. The tools **do not** assert that photos have been downloaded in this environment, source labels are perfect, commercial card-art rights are cleared, or these datasets measure exact card printing identity. See WEB_IMAGE_DATASETS.md.
 
+### P1 RF-DETR Nano pilot — 13 October 2026
+
+Implemented an optional adapter for Apache-2.0 RF-DETR Nano, strictly
+requiring a **trusted local checkpoint fine-tuned on an explicit trading-card
+class**. A generic COCO pre-trained model cannot be used to claim card
+detection. Added an opt-in training launcher that audits YOLO train/valid/test
+splits for exact byte duplicates, user-permission attestation and a private
+checkpoint destination; CPU training requires explicit opt-in. The local paired
+benchmark uses exactly the same held-out YOLO photos, photo SHA-256, bounding
+box labels and IoU threshold for OpenCV and RF-DETR. It records TP/FP/FN,
+precision/recall/F1 and detector inference timing per image and produces a
+private static HTML/JSON comparison. Simulated detections are used in CI;
+**no trained card model, genuine RF-DETR performance score, verified card
+identification rate or commercial artwork license exists yet**. The P1
+accuracy/data license gate remains OPEN. See RFDETR_EXPERIMENT.md.
+
 ## Delivery roadmap and release gates
 
 | Phase | Planning window | Shippable outcome | Gate |
