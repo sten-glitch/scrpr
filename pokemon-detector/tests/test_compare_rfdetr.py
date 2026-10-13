@@ -174,6 +174,7 @@ class TestPairedComparison(unittest.TestCase):
         self.assertIsNone(report["actual_exact_card_identity_accuracy"])
         html_report=report_html(report)
         self.assertIn("Paired metrics",html_report)
+        self.assertIn("Mean detector time",html_report)
         self.assertIn("NOT exact Pokémon identity accuracy",html_report)
 
     def test_detector_inference_failure_fails_whole_benchmark(self):
@@ -199,6 +200,17 @@ class TestPairedComparison(unittest.TestCase):
         model_report["cases"][0]["image"]="not-the-same-photo.jpg"
         with self.assertRaisesRegex(CompareError,"Different photos"):
             compare_reports(baseline,model_report)
+
+    def test_photo_content_sha_mismatch_rejects_paired_claim(self):
+        self.photo("case01","0 0.5 0.5 0.5 0.5",100)
+        with patch("external_detection_benchmark.detect_card_boxes",return_value=[]):
+            baseline=benchmark_yolo(self.root,source="detector")
+        self.assertEqual(len(baseline["cases"][0]["image_sha256"]),64)
+        self.assertGreaterEqual(baseline["inference_measurement"]["mean_ms_per_image"],0)
+        alternate=copy.deepcopy(baseline)
+        alternate["cases"][0]["image_sha256"]="0"*64
+        with self.assertRaisesRegex(CompareError,"bytes"):
+            compare_reports(baseline,alternate)
 
     def test_html_escapes_unsafe_image_names(self):
         self.photo("case01","",100)
