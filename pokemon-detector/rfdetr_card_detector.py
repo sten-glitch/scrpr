@@ -104,12 +104,19 @@ class RFDETRCardDetector:
             raise RFDETRCardError("threshold must be in (0,1]")
         if type(max_boxes) is not int or not 1<=max_boxes<=100:
             raise RFDETRCardError("max_boxes must be 1..100")
-        path=Path(checkpoint).expanduser().resolve()
-        if (not path.is_file() or path.is_symlink()
+        supplied=Path(checkpoint).expanduser()
+        if supplied.is_symlink():
+            raise RFDETRCardError("Checkpoint symlinks are not permitted")
+        path=supplied.resolve()
+        if (not path.is_file()
                 or path.suffix.lower() not in {".pth",".ckpt"}
                 or not 1<=path.stat().st_size<=MAX_CHECKPOINT_BYTES):
             raise RFDETRCardError("Fine-tuned, local, trusted .pth/.ckpt checkpoint required")
-        self.checkpoint_sha256=hashlib.sha256(path.read_bytes()).hexdigest()
+        digest=hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda:stream.read(1024*1024),b""):
+                digest.update(chunk)
+        self.checkpoint_sha256=digest.hexdigest()
         self.checkpoint_name=path.name
         self.threshold=float(threshold)
         self.max_boxes=max_boxes
