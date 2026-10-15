@@ -47,7 +47,7 @@ def runtime_capabilities(card_detector=None):
     except LocalCVError:
         cv=False
     return {"photo_detection_available":cv,
-            "ocr_available":cv and shutil.which("tesseract") is not None,
+            "ocr_available":cv and __import__("certificate_reader").tesseract_executable() is not None,
             "photo_detector":("rfdetr_nano" if card_detector is not None else "opencv") if cv else "unavailable",
             "rfdetr_enabled":card_detector is not None}
 
@@ -321,7 +321,7 @@ class AlphaHandler(BaseHTTPRequestHandler):
                         raise AlphaInputError("Upload one upright slab photo")
                     routed=self.server.vision_router.analyze_listing_image(images[0][1],
                         {"grader_hint":payload.get("grader_hint")},
-                        policy={"pipeline":"certificate-v1:"+str(shutil.which("tesseract"))})
+                        policy={"pipeline":"certificate-v2:"+str(__import__("certificate_reader").tesseract_executable())+":"+__import__("os").environ.get("BIGSTEN_OCR_LANG", "eng")})
                     out={**routed.pop("result"), "routing":routed}
                 else:
                     out=review_supply(payload.get("listings"))
@@ -378,6 +378,9 @@ def main(argv=None):
             except (OSError,ValueError):
                 pass
     catalog=[]
+    default_catalog=Path(__file__).resolve().parent / "private/catalog-en-ja.json"
+    if not args.catalog and default_catalog.is_file():
+        args.catalog=str(default_catalog)
     if args.catalog:
         catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8"))
         if not isinstance(catalog,list):

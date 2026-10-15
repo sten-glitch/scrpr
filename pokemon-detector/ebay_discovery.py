@@ -73,6 +73,8 @@ class EbayClient:
             raise ValueError("max_requests must be 1..300")
         self.environment = environment
         self.base = "https://api.sandbox.ebay.com" if environment == "sandbox" else "https://api.ebay.com"
+        from local_config import load_ebay_config
+        load_ebay_config()
         prefix = "EBAY_" + environment.upper()
         self._client_id = os.environ.get(prefix + "_CLIENT_ID")
         self._secret = os.environ.get(prefix + "_CLIENT_SECRET")

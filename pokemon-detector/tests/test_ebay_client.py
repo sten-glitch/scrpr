@@ -15,6 +15,9 @@ CREDS = {"EBAY_SANDBOX_CLIENT_ID": "fixture-id", "EBAY_SANDBOX_CLIENT_SECRET": "
 
 class ClientTests(unittest.TestCase):
     def setUp(self):
+        loader = patch("local_config.load_ebay_config")
+        loader.start()
+        self.addCleanup(loader.stop)
         self.env = patch.dict(os.environ, CREDS, clear=True)
         self.env.start()
         self.addCleanup(self.env.stop)

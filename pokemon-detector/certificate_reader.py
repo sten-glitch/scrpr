@@ -6,6 +6,9 @@ geometric hypotheses, not a trained label detector. No network or image storage.
 from __future__ import annotations
 
 import hashlib
+import os
+import shutil
+from pathlib import Path
 import re
 import threading
 from typing import Callable
@@ -99,9 +102,29 @@ def parse_certificate_text(text: str, grader_hint: str | None = None, *,
             "verification_status": "unavailable", "authenticity": "unknown"}
 
 
+def tesseract_executable():
+    configured = os.environ.get("BIGSTEN_TESSERACT_CMD")
+    if configured:
+        return configured if Path(configured).is_file() else None
+    found = shutil.which("tesseract")
+    conventional = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Tesseract-OCR/tesseract.exe"
+    return found or (str(conventional) if conventional.is_file() else None)
+
+
 def _tesseract_ocr(image) -> str:
     import pytesseract
-    return pytesseract.image_to_string(image, config="--psm 6", timeout=3)
+    executable = tesseract_executable()
+    if executable:
+        pytesseract.pytesseract.tesseract_cmd = executable
+    language = os.environ.get("BIGSTEN_OCR_LANG", "eng")
+    if language not in {"eng", "jpn", "eng+jpn"}:
+        raise ValueError("Unsupported OCR language configuration")
+    data = Path(__file__).resolve().parent / "private/tessdata"
+    config = '--psm 6'
+    if data.is_dir():
+        # pytesseract keeps literal quotes in Windows config arguments.
+        os.environ["TESSDATA_PREFIX"] = str(data)
+    return pytesseract.image_to_string(image, lang=language, config=config, timeout=3)
 
 
 def read_slab_certificate(image: bytes, grader_hint: str | None = None, *,

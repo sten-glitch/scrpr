@@ -85,6 +85,7 @@ def benchmark_certificates(manifest: dict, image_root: str | Path, *, reader=Non
             if hashlib.sha256(data).hexdigest() != case["sha256"]:
                 raise ValueError("Image changed after preflight")
             start = time.perf_counter()
+            result = {}
             try:
                 result = engine(data)  # Never supply the expected grader as a hint.
                 if not isinstance(result, dict):
@@ -95,11 +96,15 @@ def benchmark_certificates(manifest: dict, image_root: str | Path, *, reader=Non
                 match = not failed and result.get("grader") == case["grader"] and result.get("certificate_number") == case["certificate_number"]
                 error = "reader_unavailable" if unavailable else ("reader_failed" if failed else None)
             except Exception as exc:
+                result = {}
                 match, unavailable, failed, error = False, False, True, type(exc).__name__
             elapsed = (time.perf_counter() - start) * 1000
             latencies.append(elapsed)
             rows.append({"case_id": case["case_id"], "sha256": case["sha256"],
                          "clear_label": case["clear_label"], "exact_match": bool(match),
+                         "expected_grader": case["grader"],
+                         "grader_match": not failed and result.get("grader") == case["grader"],
+                         "grade_match": (not failed and result.get("grade") == case["grade"]) if case.get("grade") else None,
                          "engine_unavailable": unavailable, "failed": failed,
                          "error": error, "latency_ms": round(elapsed, 3)})
         _, peak = tracemalloc.get_traced_memory()
@@ -109,7 +114,16 @@ def benchmark_certificates(manifest: dict, image_root: str | Path, *, reader=Non
     clear = [row for row in rows if row["clear_label"]]
     eligible_groups = {c["independent_group_id"] for c in cases if c["is_real"] and c["clear_label"]}
     measurable = any(not row["failed"] for row in rows)
-    return {"schema_version": 1, "case_count": len(rows), "clear_label_count": len(clear),
+    graded_rows = [r for r in rows if r["grade_match"] is not None]
+    per_grader = {}
+    for grader in ("PSA", "BGS", "CGC"):
+        subset = [r for r in rows if r["expected_grader"] == grader]
+        per_grader[grader] = {"count": len(subset), "exact_match_rate": sum(r["exact_match"] for r in subset)/len(subset) if subset else None}
+    return {"schema_version": 1,
+            "per_grader": per_grader,
+            "grader_recognition_rate": sum(r["grader_match"] for r in rows)/len(rows),
+            "grade_recognition_rate": sum(r["grade_match"] for r in graded_rows)/len(graded_rows) if graded_rows else None,
+            "grade_labeled_count": len(graded_rows), "case_count": len(rows), "clear_label_count": len(clear),
             "exact_match_rate": sum(row["exact_match"] for row in rows) / len(rows),
             "clear_label_exact_match_rate": sum(row["exact_match"] for row in clear) / len(clear) if clear else None,
             "accuracy_measurable": measurable, "engine_unavailable_count": sum(row["engine_unavailable"] for row in rows),

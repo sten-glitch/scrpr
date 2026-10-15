@@ -6,7 +6,7 @@ Reservations survive errors/crashes and unknown billing is never refunded.
 """
 from contextlib import closing
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal, ROUND_CEILING, InvalidOperation
 import hashlib
 import io
 import json
@@ -15,7 +15,10 @@ import uuid
 
 
 def _units(value):
-    number = Decimal(str(value))
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError("Invalid budget amount") from exc
     if not number.is_finite() or number < 0 or number > 1000000:
         raise ValueError("Invalid budget amount")
     return int((number * 1000000).to_integral_value(rounding=ROUND_CEILING))
@@ -41,18 +44,20 @@ class VisionCostRouter:
     def analyze_listing_image(self, image, metadata, budget=None, policy=None, *,
                               local_analyzer=None, external_analyzer=None):
         budget, policy = budget or {}, policy or {}
-        if not isinstance(image, bytes) or not image or len(image) > 20_000_000:
-            raise ValueError("Expected image bytes up to 20 MB")
+        if not isinstance(image, bytes) or not image or len(image) > 5 * 1024 * 1024:
+            raise ValueError("Expected image bytes up to 5 MiB")
         if not isinstance(metadata, dict):
             raise ValueError("Metadata must be a dictionary")
         from PIL import Image
         with Image.open(io.BytesIO(image)) as photo:
             pixels = photo.width * photo.height
-            if pixels > 25000000:
+            if pixels > 12000000:
                 raise ValueError("Image exceeds pixel limit")
+            if photo.format not in {"JPEG", "PNG", "WEBP"}:
+                raise ValueError("Unsupported image format")
             photo.verify()
         canonical = json.dumps({"metadata": metadata, "model": policy.get("model", "local-certificate-v1"),
-            "pipeline": policy.get("pipeline", "local-first-v1"),
+            "pipeline": policy.get("pipeline", "local-first-v2"),
             "external_enabled": policy.get("external_authorized") is True and external_analyzer is not None},
             sort_keys=True, separators=(",", ":"), allow_nan=False)
         key = hashlib.sha256(image + canonical.encode()).hexdigest()
@@ -60,7 +65,7 @@ class VisionCostRouter:
             cached = db.execute("SELECT result_json FROM vision_cache WHERE cache_key=?", (key,)).fetchone()
         if cached:
             response = json.loads(cached[0])
-            response.update(cache_hit=True, external_called=False)
+            response.update(cache_hit=True, external_called=False, cost_reserved=0, actual_cost=0)
             return response
         if local_analyzer is None:
             from certificate_reader import read_slab_certificate
@@ -77,7 +82,8 @@ class VisionCostRouter:
             return response
         if policy.get("external_authorized") is not True or external_analyzer is None:
             response["reason"] = "external_disabled"
-            self._cache(key, response)
+            if local.get("status") not in {"unavailable", "partial"} and not local.get("errors"):
+                self._cache(key, response)
             return response
         # An estimate is not an upper bound. Only adapters with enforced ceilings
         # may be called; the entire ceiling, not the estimate, is reserved.

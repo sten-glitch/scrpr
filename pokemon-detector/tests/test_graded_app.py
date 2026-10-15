@@ -14,6 +14,14 @@ from vision import call_vision_api, VisionError
 
 
 class GradedAppTests(unittest.TestCase):
+    def setUp(self):
+        loader = patch('local_config.load_ebay_config')
+        loader.start()
+        self.addCleanup(loader.stop)
+        transport = patch('ebay_discovery._transport', side_effect=AssertionError('Live eBay forbidden in unit tests'))
+        transport.start()
+        self.addCleanup(transport.stop)
+
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()

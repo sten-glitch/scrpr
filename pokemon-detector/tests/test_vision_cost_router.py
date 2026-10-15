@@ -64,6 +64,15 @@ class RouterTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(db.execute("SELECT charged FROM vision_budget").fetchone()[0], 200000)
 
+    def test_unavailable_ocr_is_retried_and_cache_cost_is_zero(self):
+        for _ in range(2):
+            result = self.call(policy={}, local_analyzer=lambda *_: {"status": "unavailable"})
+            self.assertFalse(result["cache_hit"])
+        self.call()
+        result = self.call()
+        self.assertEqual(result["cost_reserved"], 0)
+        self.assertEqual(result["actual_cost"], 0)
+
     def test_no_ceiling_resolution_attempt_limit(self):
         self.assertEqual(self.call(policy={"external_authorized": True})["reason"], "provider_cost_ceiling_unavailable")
         self.assertEqual(self.call(policy=dict(self.policy, max_pixels=100))["reason"], "resolution_limit")
