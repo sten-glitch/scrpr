@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import threading
 from pathlib import Path
 
 from external_detection_benchmark import DetectionBenchmarkError
@@ -120,8 +121,10 @@ class RFDETRCardDetector:
         self.checkpoint_name=path.name
         self.threshold=float(threshold)
         self.max_boxes=max_boxes
+        expected_model_type=None
         if loader is None:
             try:
+                from rfdetr import RFDETRNano
                 from rfdetr.detr import RFDETR
             except (ImportError,RuntimeError) as exc:
                 raise RFDETRCardError(
@@ -129,6 +132,7 @@ class RFDETRCardDetector:
                     "environment with python -m pip install rfdetr."
                 ) from exc
             loader=RFDETR.from_checkpoint
+            expected_model_type=RFDETRNano
         # The checkpoint MUST be from a trusted fine-tuning run. Unlike
         # executable code, checkpoint weights are not safe to load from
         # arbitrary public links.
@@ -136,9 +140,12 @@ class RFDETRCardDetector:
             model=loader(str(path))
         except Exception as exc:
             raise RFDETRCardError("Unable to open trusted RF-DETR checkpoint") from exc
+        if expected_model_type is not None and type(model) is not expected_model_type:
+            raise RFDETRCardError("This Nano benchmark requires an RFDETRNano checkpoint")
         positions=_class_positions(model.class_names)
         self.card_class_id=next(iter(positions))
         self.model=model
+        self._inference_lock=threading.Lock()
         self.model_class_names=tuple(model.class_names) if isinstance(model.class_names,(list,tuple)) else dict(model.class_names)
 
     def __call__(self,bgr):
@@ -153,7 +160,8 @@ class RFDETRCardDetector:
             from PIL import Image
             rgb=cv2.cvtColor(bgr,cv2.COLOR_BGR2RGB)
             frame=Image.fromarray(rgb)
-            prediction=self.model.predict(frame,threshold=self.threshold)
+            with self._inference_lock:
+                prediction=self.model.predict(frame,threshold=self.threshold)
         except Exception as exc:
             raise RFDETRCardError("RF-DETR local inference failed") from exc
         return _normalized_boxes(prediction,class_id=self.card_class_id,

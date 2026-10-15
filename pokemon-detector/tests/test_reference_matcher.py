@@ -169,7 +169,8 @@ class TestReferenceMatcher(unittest.TestCase):
     def test_no_original_reference_image_bytes_stored_in_db(self):
         img=self.make_reference("a.png",seed=6)
         matcher=self.build(manifest(("ref_A","demo:variant-A","a.png")))
-        with sqlite3.connect(self.root/"private"/"cards.sqlite") as db:
+        from contextlib import closing
+        with closing(sqlite3.connect(self.root/"private"/"cards.sqlite")) as db:
             rows=db.execute("SELECT reference_id,identity_key,phash,orb,rights_basis FROM reference_features").fetchall()
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0][1],"demo:variant-A")

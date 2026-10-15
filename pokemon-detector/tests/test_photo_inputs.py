@@ -103,6 +103,7 @@ class TestPhotoInputs(unittest.TestCase):
                 self.assertIn("Bearer", req.headers["Authorization"])
                 return Response()
             with patch.dict("os.environ", {"VISION_API_KEY": "test-only-key",
+                                           "BIGSTEN_PAID_VISION_AUTHORIZED": "1",
                                            "VISION_API_URL": "https://api.openai.com/v1/chat/completions"}), \
                  patch("vision.urllib.request.urlopen", side_effect=opener):
                 got = call_vision_api({"image_files": [path], "title": "Mock listing"})

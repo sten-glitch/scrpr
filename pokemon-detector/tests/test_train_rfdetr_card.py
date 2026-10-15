@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from train_rfdetr_card import (
-    TrainingGateError,audit_training_dataset,train_private_card_detector,
+    TrainingGateError,audit_training_dataset,train_private_card_detector,verify_vendor_dataset,
 )
 
 
@@ -67,6 +67,8 @@ class TrainingLabTests(unittest.TestCase):
         self.assertEqual(len(runs),1)
         self.assertEqual(runs[0]["epochs"],2)
         self.assertEqual(runs[0]["batch_size"],1)
+        self.assertIs(runs[0]["run_test"],False)
+        self.assertEqual(runs[0]["num_workers"],0)
         self.assertEqual(runs[0]["dataset_dir"],str(self.dataset.resolve()))
         self.assertFalse(result["weights_available_and_evaluated"])
         self.assertFalse(result["test_split_evaluated_in_training_launcher"])
@@ -81,6 +83,30 @@ class TrainingLabTests(unittest.TestCase):
         (self.dataset/"test/images"/"photo_test.png").write_bytes(original)
         with self.assertRaisesRegex(TrainingGateError,"leakage"):
             audit_training_dataset(self.dataset)
+
+    def test_vendor_cannot_train_on_test_via_yaml_redirect(self):
+        def redirected(root,data_file,split):
+            name="test" if split=="train" else "valid" if split=="val" else split
+            return root/name/"images",root/name/"labels"
+        with self.assertRaisesRegex(TrainingGateError,"differ"):
+            verify_vendor_dataset(self.dataset,resolver=redirected)
+
+    def test_mixed_coco_export_rejected(self):
+        (self.dataset/"train/_annotations.coco.json").write_text("{}")
+        with self.assertRaisesRegex(TrainingGateError,"Mixed"):
+            verify_vendor_dataset(self.dataset,resolver=lambda *args:None)
+
+    def test_unsupported_image_cannot_escape_hash_audit(self):
+        (self.dataset/"train/images/extra.bmp").write_bytes(b"duplicate")
+        with self.assertRaisesRegex(TrainingGateError,"bypass"):
+            audit_training_dataset(self.dataset)
+
+    def test_malformed_or_unknown_class_labels_fail_before_model_load(self):
+        label=self.dataset/"train/labels/photo_train.txt"
+        for content in ("0 nan 0.5 0.1 0.1", "5 0.5 0.5 0.1 0.1"):
+            label.write_text(content)
+            with self.subTest(content=content),self.assertRaisesRegex(TrainingGateError,"Invalid YOLO"):
+                audit_training_dataset(self.dataset)
 
     def test_missing_test_is_not_a_valid_training_experiment(self):
         (self.dataset/"test/labels"/"photo_test.txt").unlink()

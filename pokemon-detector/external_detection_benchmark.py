@@ -261,6 +261,9 @@ def benchmark_yolo(root: str | Path, *, split="test", card_class_id=None,
             "inference_ms":round(inference_ms,3),
             "status":"EVALUATED_BOXES_NOT_IDENTITY",
             "ground_truth_boxes":len(boxes),"predicted_boxes":len(predicted),
+            "ground_truth_sha256":hashlib.sha256(
+                json.dumps(boxes,separators=(",",":"),allow_nan=False).encode("utf-8")
+            ).hexdigest(),
             "tp":match["true_positives"],"fp":match["false_positives"],
             "fn":match["false_negatives"],
             "iou_threshold":iou_threshold,

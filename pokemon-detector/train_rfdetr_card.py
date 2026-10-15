@@ -29,7 +29,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from external_detection_benchmark import _class_id,IMAGE_TYPES,DetectionBenchmarkError
+from external_detection_benchmark import _class_id,_parse_boxes,IMAGE_TYPES,DetectionBenchmarkError
 
 
 class TrainingGateError(ValueError):
@@ -37,10 +37,31 @@ class TrainingGateError(ValueError):
 
 
 def _files(directory:Path) -> list[Path]:
-    return sorted(p for p in directory.iterdir() if
-                  p.is_file() and not p.is_symlink()
-                  and p.suffix.lower() in IMAGE_TYPES
-                  and 0<p.stat().st_size<=5*1024*1024)
+    paths=[]
+    for p in directory.iterdir():
+        if not p.is_file():
+            raise TrainingGateError(f"Unexpected entry in image directory: {p.name}")
+        if (p.is_symlink() or p.suffix.lower() not in IMAGE_TYPES
+                or not 0<p.stat().st_size<=5*1024*1024):
+            raise TrainingGateError(f"Unsupported image must not bypass leakage audit: {p.name}")
+        paths.append(p)
+    return sorted(paths)
+
+
+def verify_vendor_dataset(dataset, resolver=None):
+    """The pinned RF-DETR loader must consume exactly the audited directories."""
+    root=Path(dataset).resolve()
+    if resolver is None:
+        from rfdetr.datasets.yolo import _resolve_yolo_split_dirs
+        resolver=_resolve_yolo_split_dirs
+    # Auto-detection otherwise prefers COCO over the audited YOLO labels.
+    if (root/"train"/"_annotations.coco.json").exists():
+        raise TrainingGateError("Mixed COCO/YOLO dataset is not supported")
+    for vendor_split,local_split in (("train","train"),("val","valid"),("test","test")):
+        resolved=resolver(root,root/"data.yaml",vendor_split)
+        expected=(root/local_split/"images",root/local_split/"labels")
+        if tuple(Path(p).resolve() for p in resolved)!=tuple(p.resolve() for p in expected):
+            raise TrainingGateError(f"RF-DETR {vendor_split} paths differ from audited {local_split} paths")
 
 
 def _sha(path:Path) -> str:
@@ -66,6 +87,8 @@ def audit_training_dataset(dataset: str | Path):
         labels=dataset/split/"labels"
         if not images.is_dir() or not labels.is_dir():
             raise TrainingGateError(f"{split} requires images/ and labels/ directories")
+        if images.is_symlink() or labels.is_symlink():
+            raise TrainingGateError("Split directory symlinks are not permitted")
         paths=_files(images)
         if not paths:
             raise TrainingGateError(f"Dataset {split} has no eligible image files")
@@ -73,6 +96,17 @@ def audit_training_dataset(dataset: str | Path):
         for path in paths:
             if not (labels/(path.stem+".txt")).is_file():
                 raise TrainingGateError(f"Missing {split} YOLO label file: {path.name}")
+            label=labels/(path.stem+".txt")
+            if label.is_symlink():
+                raise TrainingGateError("Label symlinks are not permitted")
+            try:
+                contents=label.read_text(encoding="utf-8")
+                _parse_boxes(contents,card_id)
+                if any(int(row.split()[0]) not in class_names
+                       for row in contents.splitlines() if row.strip()):
+                    raise ValueError("Unknown class ID")
+            except (OSError,ValueError) as exc:
+                raise TrainingGateError(f"Invalid YOLO labels: {split}/{label.name}") from exc
             digest=_sha(path)
             if digest in digest_set:
                 raise TrainingGateError(f"Duplicate exact image in {split} split")
@@ -128,12 +162,15 @@ def train_private_card_detector(dataset: str | Path,output: str | Path, *,
         except ImportError as exc:
             raise TrainingGateError("Install official RF-DETR training extra in your local venv") from exc
         model_factory=RFDETRNano
+        verify_vendor_dataset(sample["dataset"])
     output.parent.mkdir(parents=True,exist_ok=True)
     # Vendor training is the only side effect after all gate checks pass.
     model=model_factory()
     model.train(dataset_dir=sample["dataset"],
                 output_dir=str(output),
-                epochs=epochs,batch_size=batch_size)
+                epochs=epochs,batch_size=batch_size,
+                run_test=False,num_workers=0,
+                wandb=False,mlflow=False,clearml=False)
     result={
         "status":"EXPERIMENTAL_LOCAL_RFDETR_NANO_TRAINING_ATTEMPT",
         "completed_at_utc":dt.datetime.now(dt.timezone.utc).isoformat(),

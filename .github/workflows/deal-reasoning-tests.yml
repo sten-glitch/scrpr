@@ -29,3 +29,4 @@ jobs:
           node --check pokemon-detector/local_app/app.js
           node --check pokemon-detector/photo_review/app.js
           node --check pokemon-detector/local_app/workspace.js
+          node --check pokemon-detector/local_app/graded.js

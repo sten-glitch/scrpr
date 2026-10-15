@@ -240,6 +240,28 @@ class WorkspaceStore:
                     );
                 """)
 
+    def save_supply_snapshot(self, report):
+        """Extend the existing private DB; retain reports, never image payloads."""
+        if not isinstance(report, dict):
+            raise WorkspaceError("Snapshot must be an object")
+        packed = json.dumps(report, ensure_ascii=False, allow_nan=False)
+        if len(packed) > 1_000_000 or any(k in packed for k in ('"base64":', '"image_files":', '"api_key":')):
+            raise WorkspaceError("Invalid or oversized supply snapshot")
+        snapshot_id = uuid.uuid4().hex
+        with closing(self._connect()) as db, db:
+            db.execute("CREATE TABLE IF NOT EXISTS supply_snapshots (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, report_json TEXT NOT NULL)")
+            db.execute("INSERT INTO supply_snapshots VALUES (?,?,?)", (snapshot_id, _now(), packed))
+        return snapshot_id
+
+    def get_supply_snapshot(self, snapshot_id):
+        if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{32}", snapshot_id):
+            raise WorkspaceError("Invalid snapshot ID")
+        with closing(self._connect()) as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='supply_snapshots'").fetchone():
+                return None
+            row = db.execute("SELECT report_json FROM supply_snapshots WHERE id=?", (snapshot_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+
     def _event(self, db, listing_id, action, details):
         db.execute("INSERT INTO events(listing_id,happened_at,action,detail_json) VALUES (?,?,?,?)",
                    (listing_id,_now(),action,json.dumps(details,ensure_ascii=False,separators=(",",":"))))

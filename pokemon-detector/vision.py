@@ -113,6 +113,10 @@ def call_vision_api(listing: dict) -> dict:
 
     No server-side scraper and no extra secrets are sent. Expects JSON output.
     """
+    endpoint = _api_endpoint()
+    if (urllib.parse.urlsplit(endpoint).hostname not in {"localhost", "127.0.0.1", "::1"}
+            and os.environ.get("BIGSTEN_PAID_VISION_AUTHORIZED") != "1"):
+        raise VisionError("Paid vision disabled; explicit BIGSTEN_PAID_VISION_AUTHORIZED=1 required")
     try:
         prepared = prepare_photo_inputs(listing, encode_local=True)
     except PhotoInputError as exc:

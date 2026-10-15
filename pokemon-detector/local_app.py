@@ -15,13 +15,17 @@ import binascii
 import datetime as dt
 import json
 import re
+import shutil
 import tempfile
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from workspace import WorkspaceStore, WorkspaceError
 from workspace_api import workspace_get, workspace_post
+from similar_listings import search_similar, review_supply
+from vision_cost_router import VisionCostRouter
 
 from listing_truth import evaluate_listing_truth
 from local_cv import combine_local_observations, LocalCVError
@@ -32,6 +36,20 @@ from vision import analyze_listing, VisionError
 STATIC_DIR = Path(__file__).resolve().parent / "local_app"
 MAX_REQUEST = 11 * 1024 * 1024
 MAX_UPLOADS = 4
+
+
+def runtime_capabilities(card_detector=None):
+    """Report the engine the web app actually uses, not installed ML packages."""
+    try:
+        from local_cv import _modules
+        _modules()
+        cv=True
+    except LocalCVError:
+        cv=False
+    return {"photo_detection_available":cv,
+            "ocr_available":cv and shutil.which("tesseract") is not None,
+            "photo_detector":("rfdetr_nano" if card_detector is not None else "opencv") if cv else "unavailable",
+            "rfdetr_enabled":card_detector is not None}
 
 class AlphaInputError(ValueError):
     pass
@@ -77,7 +95,7 @@ def _decode_uploads(images):
 
 
 def analyze_request(payload: dict, catalog: list[dict] | None = None,
-                    matcher: ReferenceMatcher | None = None) -> dict:
+                    matcher: ReferenceMatcher | None = None, *, card_detector=None) -> dict:
     """Pure entrypoint for local UI and tests; never sends remote requests."""
     if not isinstance(payload, dict):
         raise AlphaInputError("Expected JSON object")
@@ -107,13 +125,17 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None,
     observation = payload.get("observation")
     if observation is not None and not isinstance(observation, dict):
         raise AlphaInputError("Manual observation must be a structured JSON object")
-    status = "manual_observations" if observation is not None else "opencv_offline"
+    status = "manual_observations" if observation is not None else (
+        "rfdetr_offline" if card_detector is not None else "opencv_offline")
     notes = []
     if observation is None:
         try:
-            observation = combine_local_observations([raw for _,raw in images], run_ocr=True)
-            notes.append("OpenCV and Tesseract, where available, are only provisional object/OCR candidates")
+            observation = combine_local_observations([raw for _,raw in images], run_ocr=True, detector=card_detector)
+            engine="RF-DETR Nano" if card_detector is not None else "OpenCV"
+            notes.append(f"{engine} and Tesseract, where available, are only provisional object/OCR candidates")
         except LocalCVError as exc:
+            if card_detector is not None:
+                raise AlphaInputError("RF-DETR photo analysis could not complete; no result was saved") from exc
             observation = {"kind":kind,"observations":[],"inventory_complete":False,
                            "uncertainties":["No local card recognition completed"]}
             status = "cv_unavailable"
@@ -154,6 +176,9 @@ def analyze_request(payload: dict, catalog: list[dict] | None = None,
         "costs_verified": False,
         "notes": notes,
     }
+    if card_detector is not None and status=="rfdetr_offline":
+        result["image_analysis"]["checkpoint_sha256"]=card_detector.checkpoint_sha256
+        result["image_analysis"]["confidence_threshold"]=card_detector.threshold
     # No private image content or original local paths in returned JSON.
     return result
 
@@ -162,10 +187,12 @@ class AlphaServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     def __init__(self, port: int, catalog: list[dict], matcher: ReferenceMatcher | None = None,
-                 workspace_path="private/bigsten_workspace.sqlite"):
+                 workspace_path="private/bigsten_workspace.sqlite", *, card_detector=None):
         self.catalog = catalog
         self.matcher = matcher
+        self.card_detector = card_detector
         self.workspace = WorkspaceStore(workspace_path)
+        self.vision_router = VisionCostRouter(self.workspace.path)
         super().__init__(("127.0.0.1",port), AlphaHandler)
 
 
@@ -211,7 +238,7 @@ class AlphaHandler(BaseHTTPRequestHandler):
         if not self._valid_origin():
             return self._json(403,{"error":"Only localhost access is permitted"})
         uri = urlsplit(self.path)
-        if uri.path in ("/", "/workspace", "/workspace.html"):
+        if uri.path in ("/workspace", "/workspace.html"):
             path=STATIC_DIR/"workspace.html"
             ctype="text/html; charset=utf-8"
         elif uri.path in ("/analyze", "/index.html"):
@@ -223,8 +250,21 @@ class AlphaHandler(BaseHTTPRequestHandler):
         elif uri.path=="/app.js":
             path=STATIC_DIR/"app.js"
             ctype="application/javascript; charset=utf-8"
+        elif uri.path in ("/", "/graded", "/graded.html"):
+            path=STATIC_DIR/"graded.html"
+            ctype="text/html; charset=utf-8"
+        elif uri.path=="/graded.js":
+            path=STATIC_DIR/"graded.js"
+            ctype="application/javascript; charset=utf-8"
+        elif uri.path=="/api/graded/snapshot":
+            try:
+                saved=self.server.workspace.get_supply_snapshot(parse_qs(uri.query).get("id",[""])[0])
+                return self._json(200 if saved else 404,saved or {"error":"Snapshot not found"})
+            except WorkspaceError as exc:
+                return self._json(422,{"error":str(exc)})
         elif uri.path=="/api/health":
             return self._json(200,{"status":"local_alpha","public_deployment_allowed":False,
+                                   "capabilities":runtime_capabilities(self.server.card_detector),
                                    "catalog_items":len(self.server.catalog),
                                    "reference_index_loaded":self.server.matcher is not None,
                                    "reference_photos":self.server.matcher.reference_count if self.server.matcher else 0})
@@ -244,9 +284,19 @@ class AlphaHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if not self._valid_origin():
+            # Consume only a small, declared body before closing. On Windows,
+            # closing with unread incoming bytes can reset TCP and hide the 403.
+            # Never parse this data; bound both size and time for hostile peers.
+            try:
+                rejected_length=int(self.headers.get("Content-Length","0"))
+                if 0 < rejected_length <= 65536:
+                    self.connection.settimeout(.5)
+                    self.rfile.read(rejected_length)
+            except (ValueError, OSError):
+                pass
             return self._json(403,{"error":"Only localhost access is permitted"})
         endpoint=urlsplit(self.path).path
-        if endpoint!="/api/analyze" and not endpoint.startswith("/api/workspace/"):
+        if endpoint not in {"/api/analyze", "/api/graded/search", "/api/graded/certificate", "/api/graded/supply"} and not endpoint.startswith("/api/workspace/"):
             return self._json(404,{"error":"Not found"})
         if self.headers.get("Content-Type","").split(";")[0].strip().lower()!="application/json":
             return self._json(415,{"error":"application/json required"})
@@ -258,11 +308,32 @@ class AlphaHandler(BaseHTTPRequestHandler):
             return self._json(413,{"error":"Request too large or empty"})
         try:
             payload=json.loads(self.rfile.read(length))
+            if endpoint.startswith("/api/graded/"):
+                if not isinstance(payload,dict):
+                    raise AlphaInputError("Expected JSON object")
+                if endpoint=="/api/graded/search":
+                    out=search_similar(payload.get("query", ""), self.server.catalog,
+                        live=payload.get("live",False), environment=payload.get("environment","sandbox"),
+                        markets=payload.get("markets"))
+                elif endpoint=="/api/graded/certificate":
+                    images=_decode_uploads(payload.get("images",[]))
+                    if len(images)!=1:
+                        raise AlphaInputError("Upload one upright slab photo")
+                    routed=self.server.vision_router.analyze_listing_image(images[0][1],
+                        {"grader_hint":payload.get("grader_hint")},
+                        policy={"pipeline":"certificate-v1:"+str(shutil.which("tesseract"))})
+                    out={**routed.pop("result"), "routing":routed}
+                else:
+                    out=review_supply(payload.get("listings"))
+                snapshot=self.server.workspace.save_supply_snapshot(out)
+                return self._json(200,{**out,"snapshot_id":snapshot})
+            def configured_analysis(body,catalog,matcher):
+                return analyze_request(body,catalog,matcher,card_detector=self.server.card_detector)
             if endpoint=="/api/analyze":
-                out=analyze_request(payload,self.server.catalog,self.server.matcher)
+                out=configured_analysis(payload,self.server.catalog,self.server.matcher)
                 return self._json(200,out)
             code,body=workspace_post(self.server.workspace,endpoint,payload,
-                                     analyze_listing=analyze_request,
+                                     analyze_listing=configured_analysis,
                                      catalog=self.server.catalog,matcher=self.server.matcher)
             return self._json(code,body)
         except (AlphaInputError,VisionError,WorkspaceError,ValueError,TypeError) as exc:
@@ -281,20 +352,44 @@ class AlphaHandler(BaseHTTPRequestHandler):
 def main(argv=None):
     parser=argparse.ArgumentParser(description="BIGSTEN private localhost alpha; NEVER publicly deploy")
     parser.add_argument("--port",type=int,default=8765)
+    parser.add_argument("--open-browser",action="store_true",help="Open the local workbench on startup")
     parser.add_argument("--catalog",help="Optional TCGdex catalog JSON; loaded locally")
     parser.add_argument("--reference-index",help="Optional private user-owned pHash/ORB SQLite index")
+    parser.add_argument("--rfdetr-checkpoint",help="Optional trusted local card-fine-tuned Nano checkpoint")
+    parser.add_argument("--rfdetr-confidence",type=float,default=.5)
     parser.add_argument("--workspace-db",default="private/bigsten_workspace.sqlite",
                         help="Local-only persistent SQLite workspace (inside gitignored private folder)")
     args=parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
         parser.error("Allowed local port range: 1024–65535")
+    if args.open_browser:
+        # A repeated double-click opens the running workbench instead of starting
+        # another process on its port. Explicit custom configurations still fail
+        # normally if their requested port is occupied.
+        if (not args.catalog and not args.reference_index and not args.rfdetr_checkpoint
+                and args.workspace_db=="private/bigsten_workspace.sqlite"):
+            import urllib.request
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{args.port}/api/health",timeout=1) as response:
+                    existing=json.load(response)
+                if existing.get("status")=="local_alpha":
+                    webbrowser.open(f"http://127.0.0.1:{args.port}")
+                    return
+            except (OSError,ValueError):
+                pass
     catalog=[]
     if args.catalog:
         catalog=json.loads(Path(args.catalog).read_text(encoding="utf-8"))
         if not isinstance(catalog,list):
             parser.error("Catalog must be JSON array")
     matcher=ReferenceMatcher(args.reference_index) if args.reference_index else None
-    server=AlphaServer(args.port,catalog,matcher,workspace_path=args.workspace_db)
+    card_detector=None
+    if args.rfdetr_checkpoint:
+        from rfdetr_card_detector import RFDETRCardDetector
+        card_detector=RFDETRCardDetector(args.rfdetr_checkpoint,threshold=args.rfdetr_confidence)
+    server=AlphaServer(args.port,catalog,matcher,workspace_path=args.workspace_db,card_detector=card_detector)
+    if args.open_browser:
+        webbrowser.open(f"http://127.0.0.1:{args.port}")
     print(f"BIGSTEN Workbench: http://127.0.0.1:{args.port} — local database at {server.workspace.path}")
     print(f"Photo lab: http://127.0.0.1:{args.port}/analyze (PRIVATE, never expose publicly)")
     try:

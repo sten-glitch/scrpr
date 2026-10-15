@@ -56,11 +56,14 @@ def compare_reports(opencv: dict, rfdetr: dict, *,
     for l,r in zip(lrows,rrows):
         if (l.get("image")!=r.get("image")
                 or l.get("image_sha256")!=r.get("image_sha256")
+                or not l.get("ground_truth_sha256")
+                or l.get("ground_truth_sha256")!=r.get("ground_truth_sha256")
                 or l.get("ground_truth_boxes")!=r.get("ground_truth_boxes")):
             raise CompareError("Different photos, bytes or ground-truth boxes; paired comparison invalid")
         deltas.append({
             "image":l["image"],"image_sha256":l.get("image_sha256"),
             "publisher_ground_truth_boxes":l["ground_truth_boxes"],
+            "ground_truth_sha256":l["ground_truth_sha256"],
             "opencv_tp":l["tp"],"opencv_fp":l["fp"],"opencv_fn":l["fn"],
             "rfdetr_tp":r["tp"],"rfdetr_fp":r["fp"],"rfdetr_fn":r["fn"],
             "rfdetr_recall_delta_boxes":r["tp"]-l["tp"],

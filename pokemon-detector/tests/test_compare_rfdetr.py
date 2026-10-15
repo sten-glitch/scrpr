@@ -117,6 +117,20 @@ class TestOptionalRFDETRCardDetector(unittest.TestCase):
             RFDETRCardDetector(self.ckpt,threshold=float("nan"),
                                loader=lambda path:None)
 
+    def test_real_loader_path_rejects_other_model_families(self):
+        class Nano:
+            class_names=["card"]
+        class OtherModel:
+            class_names=["card"]
+        vendor=SimpleNamespace(RFDETRNano=Nano)
+        api=SimpleNamespace(RFDETR=SimpleNamespace(
+            from_checkpoint=lambda path:OtherModel()))
+        with patch.dict(sys.modules,{"rfdetr":vendor,"rfdetr.detr":api}):
+            with self.assertRaisesRegex(RFDETRCardError,"Nano checkpoint"):
+                RFDETRCardDetector(self.ckpt)
+            api.RFDETR.from_checkpoint=lambda path:Nano()
+            self.assertEqual(RFDETRCardDetector(self.ckpt).card_class_id,0)
+
     def test_checkpoint_symlink_is_rejected(self):
         link=self.root/"linked.pth"
         try:
@@ -221,6 +235,24 @@ class TestPairedComparison(unittest.TestCase):
         text=report_html(report)
         self.assertIn("&lt;script&gt;",text)
         self.assertNotIn("<script>alert",text)
+
+    def test_changed_coordinates_with_same_box_count_reject_comparison(self):
+        self.photo("case01","0 0.5 0.5 0.5 0.5",100)
+        with patch("external_detection_benchmark.detect_card_boxes",return_value=[]):
+            baseline=benchmark_yolo(self.root,source="detector")
+            (self.root/"test/labels/case01.txt").write_text("0 0.3 0.3 0.2 0.2")
+            alternate=benchmark_yolo(self.root,source="detector")
+        self.assertEqual(baseline["cases"][0]["ground_truth_boxes"],alternate["cases"][0]["ground_truth_boxes"])
+        with self.assertRaisesRegex(CompareError,"ground-truth"):
+            compare_reports(baseline,alternate)
+
+    def test_legacy_report_without_annotation_digest_is_rejected(self):
+        self.photo("case01","",100)
+        with patch("external_detection_benchmark.detect_card_boxes",return_value=[]):
+            baseline=benchmark_yolo(self.root,source="detector")
+        del baseline["cases"][0]["ground_truth_sha256"]
+        with self.assertRaises(CompareError):
+            compare_reports(baseline,baseline)
 
 
 if __name__=="__main__":

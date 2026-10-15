@@ -141,7 +141,7 @@ class TestWorkspaceAPI(unittest.TestCase):
         self.assertEqual(code,403)
 
     def test_full_browser_workspace_page_and_script(self):
-        code,html=self.query("GET","/")
+        code,html=self.query("GET","/workspace")
         self.assertEqual(code,200)
         self.assertIn(b"Opportunity Pipeline",html)
         self.assertIn(b"Market Radar",html)
