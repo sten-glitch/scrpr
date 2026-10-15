@@ -1,5 +1,32 @@
 # Detector Pokémon
 
+> **NEW — BIGSTEN Collection Intelligence (draft branch only).**
+> The new single-user, offline-first web alpha is separate from the live daily
+> price radar and not yet deployed. On Windows, run start-bigsten.bat from the
+> pokemon-detector directory (or python local_app.py --port 8765), then open
+> http://127.0.0.1:8765. A normal browser and Python 3.12+ suffice for
+> text-only checks; optional OpenCV/Tesseract enable provisional local photo
+> processing. Do not publicly expose this unauthenticated alpha.
+>
+> Documentation: [Local Alpha guide](BIGSTEN_LOCAL_ALPHA.md) ·
+> [Commercial SaaS Master Plan](BIGSTEN_SAAS_MASTER_PLAN.md) ·
+> [Third-party rights](THIRD_PARTY_RIGHTS.md) ·
+> [Offline Photo Lab](OFFLINE_PHOTO_LAB.md) ·
+> [Sales Evidence Lab](SALES_EVIDENCE_LAB.md).
+>
+> **NEW internet datasets:** [Public Pokémon image sources + safe import](WEB_IMAGE_DATASETS.md) — Wikimedia Commons direct research download, Roboflow official dataset export (account/API permission may be required), YOLO card-box benchmark, private holdout sampling. No dataset images are committed to GitHub.
+>
+> **NEW P1 optional model:** [RF-DETR Nano vs OpenCV](RFDETR_EXPERIMENT.md) — exact-card class fine-tune, local checkpoint only, strict paired YOLO geometry benchmark and per-image CPU/GPU timing. No generic COCO model is misrepresented as a card detector.
+>
+> **NEW P1:** [Private Photo Ground Truth Lab](PHOTO_REVIEW_LAB.md) — run
+> `start-photo-lab.bat` on Windows after placing permissioned photos into
+> `private/evaluation-photos`. Label card regions, exact printing and negative
+> cases locally. Benchmark with `reference_benchmark.py --html ...` to review
+> real photo errors; no real photo dataset has been added to this public repo.
+> **No provider's marketplace data or Pokémon artwork rights are assumed merely
+> because open-source code or a developer API is available.**
+
+
 Detector zilnic de oportunități pentru cărți Pokémon. Compară Cardmarket, CardTrader, eBay (DE, FR, IT, ES, UK, SUA) și TCGplayer (SUA), calculează prețul adus în România și clasează cărțile după momentum, marjă și lichiditate.
 
 Rulează singur în fiecare dimineață la 07:30 (ora României) prin GitHub Actions și publică rezultatul pe GitHub Pages (ramura `gh-pages`): `https://sten-glitch.github.io/scrpr/`.

@@ -1,0 +1,106 @@
+{
+  "kind": "single",
+  "currency": "EUR",
+  "asking_eur": 45,
+  "acquisition": {
+    "shipping_eur": 5,
+    "taxes_eur": 2
+  },
+  "sale": {
+    "marketplace_fee_pct": 12,
+    "outbound_shipping_eur": 4,
+    "packaging_eur": 1
+  },
+  "items": [
+    {
+      "identity_key": "sv03.5-199-en-holo-raw-nm",
+      "language": "en",
+      "condition": "NM",
+      "quantity": 1,
+      "evidence": {
+        "identity_confidence": 0.95,
+        "condition_confidence": 0.95,
+        "photo_confidence": 0.95,
+        "authenticity_confidence": 0.95
+      },
+      "sold_comps": [
+        {
+          "identity_key": "sv03.5-199-en-holo-raw-nm",
+          "language": "en",
+          "condition": "NM",
+          "price_eur": 100,
+          "sold": true,
+          "verified": true,
+          "source_url": "https://example.org/sold/1",
+          "sold_at": "2026-10-10",
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-1",
+          "reviewed_at": "2026-10-11"
+        },
+        {
+          "identity_key": "sv03.5-199-en-holo-raw-nm",
+          "language": "en",
+          "condition": "NM",
+          "price_eur": 101,
+          "sold": true,
+          "verified": true,
+          "source_url": "https://example.org/sold/2",
+          "sold_at": "2026-10-10",
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-2",
+          "reviewed_at": "2026-10-11"
+        },
+        {
+          "identity_key": "sv03.5-199-en-holo-raw-nm",
+          "language": "en",
+          "condition": "NM",
+          "price_eur": 103,
+          "sold": true,
+          "verified": true,
+          "source_url": "https://example.org/sold/3",
+          "sold_at": "2026-10-10",
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-3",
+          "reviewed_at": "2026-10-11"
+        },
+        {
+          "identity_key": "sv03.5-199-en-holo-raw-nm",
+          "language": "en",
+          "condition": "NM",
+          "price_eur": 104,
+          "sold": true,
+          "verified": true,
+          "source_url": "https://example.org/sold/4",
+          "sold_at": "2026-10-10",
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-4",
+          "reviewed_at": "2026-10-11"
+        },
+        {
+          "identity_key": "sv03.5-199-en-holo-raw-nm",
+          "language": "en",
+          "condition": "NM",
+          "price_eur": 105,
+          "sold": true,
+          "verified": true,
+          "source_url": "https://example.org/sold/5",
+          "sold_at": "2026-10-10",
+          "match_confidence": 0.97,
+          "verification_method": "human_attestation",
+          "reviewer": "synthetic-demo-reviewer",
+          "proof_reference": "fictional-document-5",
+          "reviewed_at": "2026-10-11"
+        }
+      ]
+    }
+  ],
+  "costs_verified": true
+}
