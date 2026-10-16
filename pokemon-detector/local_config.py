@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 KEYS = ('EBAY_SANDBOX_CLIENT_ID', 'EBAY_SANDBOX_CLIENT_SECRET',
-        'EBAY_PRODUCTION_CLIENT_ID', 'EBAY_PRODUCTION_CLIENT_SECRET', 'EBAY_ENVIRONMENT')
+        'EBAY_PRODUCTION_CLIENT_ID', 'EBAY_PRODUCTION_CLIENT_SECRET', 'EBAY_ENVIRONMENT',
+        'EBAY_DELETION_VERIFICATION_TOKEN', 'EBAY_DELETION_ENDPOINT')
 CONFIG_PATH = Path(__file__).resolve().parent / '.env'
 
 
@@ -34,7 +35,7 @@ def load_ebay_config(path=CONFIG_PATH):
 
 def credential_status():
     load_ebay_config()
-    return {key: bool(os.environ.get(key)) for key in KEYS if key != 'EBAY_ENVIRONMENT'}
+    return {key: bool(os.environ.get(key)) for key in KEYS if key.endswith(('_CLIENT_ID', '_CLIENT_SECRET'))}
 
 if __name__ == '__main__':
     import json

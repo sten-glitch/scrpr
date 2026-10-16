@@ -34,6 +34,9 @@ concurrency:
 
 jobs:
   scan:
+    # Ephemeral runners and downloadable artifacts have no deletion receiver.
+    # Re-enable only after implementing central storage and deletion propagation.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

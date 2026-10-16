@@ -1,0 +1,2 @@
+# Signature verification; no paid service. Compatible with Python >=3.11.
+cryptography>=44,<49

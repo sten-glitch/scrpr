@@ -296,7 +296,7 @@ class AlphaHandler(BaseHTTPRequestHandler):
                 pass
             return self._json(403,{"error":"Only localhost access is permitted"})
         endpoint=urlsplit(self.path).path
-        if endpoint not in {"/api/analyze", "/api/graded/search", "/api/graded/certificate", "/api/graded/supply"} and not endpoint.startswith("/api/workspace/"):
+        if endpoint not in {"/api/analyze", "/api/graded/search", "/api/graded/certificate", "/api/graded/supply", "/api/graded/export"} and not endpoint.startswith("/api/workspace/"):
             return self._json(404,{"error":"Not found"})
         if self.headers.get("Content-Type","").split(";")[0].strip().lower()!="application/json":
             return self._json(415,{"error":"application/json required"})
@@ -309,8 +309,17 @@ class AlphaHandler(BaseHTTPRequestHandler):
         try:
             payload=json.loads(self.rfile.read(length))
             if endpoint.startswith("/api/graded/"):
+                deletion_epoch = self.server.workspace.deletions.epoch()
                 if not isinstance(payload,dict):
                     raise AlphaInputError("Expected JSON object")
+                if endpoint == '/api/graded/export':
+                    identifier = payload.get('snapshot_id', '')
+                    report = self.server.workspace.get_supply_snapshot(identifier)
+                    if report is None:
+                        return self._json(404, {'error': 'Snapshot no longer available'})
+                    target = self.server.workspace.deletions.export(identifier + '.json', report,
+                        scope=report.get('environment', '*'), epoch=deletion_epoch)
+                    return self._json(200, {'saved_to': str(target), 'managed_deletion': True})
                 if endpoint=="/api/graded/search":
                     out=search_similar(payload.get("query", ""), self.server.catalog,
                         live=payload.get("live",False), environment=payload.get("environment","sandbox"),
@@ -325,7 +334,7 @@ class AlphaHandler(BaseHTTPRequestHandler):
                     out={**routed.pop("result"), "routing":routed}
                 else:
                     out=review_supply(payload.get("listings"))
-                snapshot=self.server.workspace.save_supply_snapshot(out)
+                snapshot=self.server.workspace.save_supply_snapshot(out, epoch=deletion_epoch)
                 return self._json(200,{**out,"snapshot_id":snapshot})
             def configured_analysis(body,catalog,matcher):
                 return analyze_request(body,catalog,matcher,card_detector=self.server.card_detector)

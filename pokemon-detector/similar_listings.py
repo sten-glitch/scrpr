@@ -9,6 +9,7 @@ import time
 from graded_identity import resolve_query, metadata_prefilter
 from ebay_discovery import EbayClient, EbayError, _images
 from unique_supply import aggregate_supply
+from ebay_deletion import seller_identity
 
 
 def search_similar(query, catalog, *, live=False, environment="sandbox",
@@ -65,6 +66,7 @@ def search_similar(query, catalog, *, live=False, environment="sandbox",
                             "query":phrase})
                         continue
                     seen[item_id] = {"item_id": item_id, "marketplace": market, "marketplaces": [market],
+                                     "seller_identity": seller_identity(item),
                                      "title": str(item.get("title") or "")[:300],
                                      "url": item.get("itemWebUrl"), "images": _images(item),
                                      "price": item.get("price"), "grading_claim": scope,

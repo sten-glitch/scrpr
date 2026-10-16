@@ -250,7 +250,7 @@
         });
       });
     }
-    if (lead.analysis) {
+      if (lead.analysis && lead.source !== 'ebay' && !/ebay\./i.test(lead.source_url || '') && !/ebay/i.test(JSON.stringify(lead.analysis))) {
       const download = text(area,"button","Export saved analysis JSON ↓","secondary");
       download.type = "button";
       download.addEventListener("click", () => {

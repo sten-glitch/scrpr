@@ -12,6 +12,7 @@ import io
 import json
 import sqlite3
 import uuid
+from ebay_deletion import DeletionLedger
 
 
 def _units(value):
@@ -27,6 +28,7 @@ def _units(value):
 class VisionCostRouter:
     def __init__(self, db_path):
         self.db_path = str(db_path)
+        self.deletions = DeletionLedger(db_path)
         with closing(self._connect()) as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS vision_cache (
@@ -39,11 +41,14 @@ class VisionCostRouter:
             """)
 
     def _connect(self):
-        return sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
+        db = sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
+        db.execute('PRAGMA secure_delete=ON')
+        return db
 
     def analyze_listing_image(self, image, metadata, budget=None, policy=None, *,
                               local_analyzer=None, external_analyzer=None):
         budget, policy = budget or {}, policy or {}
+        deletion_epoch = self.deletions.epoch()
         if not isinstance(image, bytes) or not image or len(image) > 5 * 1024 * 1024:
             raise ValueError("Expected image bytes up to 5 MiB")
         if not isinstance(metadata, dict):
@@ -61,7 +66,9 @@ class VisionCostRouter:
             "external_enabled": policy.get("external_authorized") is True and external_analyzer is not None},
             sort_keys=True, separators=(",", ":"), allow_nan=False)
         key = hashlib.sha256(image + canonical.encode()).hexdigest()
-        with closing(self._connect()) as db:
+        with closing(self._connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            self.deletions.register(db, 'cache', key, metadata, epoch=deletion_epoch)
             cached = db.execute("SELECT result_json FROM vision_cache WHERE cache_key=?", (key,)).fetchone()
         if cached:
             response = json.loads(cached[0])
@@ -78,12 +85,12 @@ class VisionCostRouter:
                     "external_called": False, "reason": "local_unresolved", "cost_reserved": 0}
         if local.get("resolved") is True:
             response["reason"] = "local_resolved"
-            self._cache(key, response)
+            self._cache(key, response, metadata, deletion_epoch)
             return response
         if policy.get("external_authorized") is not True or external_analyzer is None:
             response["reason"] = "external_disabled"
             if local.get("status") not in {"unavailable", "partial"} and not local.get("errors"):
-                self._cache(key, response)
+                self._cache(key, response, metadata, deletion_epoch)
             return response
         # An estimate is not an upper bound. Only adapters with enforced ceilings
         # may be called; the entire ceiling, not the estimate, is reserved.
@@ -111,6 +118,7 @@ class VisionCostRouter:
         reservation = uuid.uuid4().hex
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
+            self.deletions.register(db, 'cache', key, metadata, epoch=deletion_epoch)
             active = db.execute("SELECT COUNT(*) FROM vision_budget WHERE status='pending'").fetchone()[0]
             overrun = db.execute("SELECT COUNT(*) FROM vision_budget WHERE status='provider_cost_overrun'").fetchone()[0]
             count = db.execute("SELECT COUNT(*) FROM vision_budget WHERE listing_id=?", (listing_id,)).fetchone()[0]
@@ -145,10 +153,12 @@ class VisionCostRouter:
             with closing(self._connect()) as db:
                 db.execute("UPDATE vision_budget SET charged=?,status=? WHERE id=?", (charged, status, reservation))
         if status == "complete":
-            self._cache(key, response)
+            self._cache(key, response, metadata, deletion_epoch)
         return response
 
-    def _cache(self, key, response):
+    def _cache(self, key, response, metadata, deletion_epoch):
         data = json.dumps(response, allow_nan=False)
-        with closing(self._connect()) as db:
+        with closing(self._connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            self.deletions.register(db, 'cache', key, metadata, epoch=deletion_epoch)
             db.execute("INSERT OR REPLACE INTO vision_cache VALUES(?,?)", (key, data))

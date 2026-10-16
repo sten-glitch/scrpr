@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install free offline vision dependencies for synthetic image tests
-        run: python -m pip install -r pokemon-detector/requirements-local.txt
+        run: python -m pip install -r pokemon-detector/requirements-local.txt -r pokemon-detector/requirements-deletion.txt
       - name: Python detector, local CV and reasoning unit tests
         run: python -m unittest discover -s pokemon-detector/tests -v
       - name: Dashboard and local-app JavaScript checks

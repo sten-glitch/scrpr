@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 from pathlib import Path
+from ebay_deletion import DeletionLedger, seller_identity
 
 from detector import EBAY_MARKETS, EBAY_CTX, EBAY_SEARCH, ECB, ebay_token, get, get_json, parse_ecb, to_eur
 from vision import MAX_IMAGES, VisionError, analyze_listing, validate_image_url
@@ -246,6 +247,7 @@ def listing_from_ebay(item: dict, market: str, hint: str, fx: dict) -> dict | No
             break
     listing = {
         "listing_id": f"ebay:{market}:{item_id}",
+        "seller_identity": seller_identity(item),
         "item_id": item_id,
         "source": "eBay Browse API", "marketplace": market,
         "listing_url": url, "title": str(item.get("title") or "")[:300],
@@ -361,11 +363,16 @@ def main(argv=None):
     p.add_argument("--max-pages", type=int, default=1)
     p.add_argument("--max-offers", type=int, default=30)
     p.add_argument("--details", action="store_true", help="Fetch item details and additional images")
-    p.add_argument("--out", default="pokemon_scan.json")
+    p.add_argument("--out", default="pokemon_scan.json", help="Filename within the workspace managed export directory")
+    p.add_argument("--workspace", default="private/bigsten_workspace.sqlite")
     p.add_argument("--vision-top", type=int, default=0,
                    help="Opt-in to a maximum number of AI vision calls (default zero)")
     p.add_argument("--catalog", help="Catalog JSON from catalog_export.py")
     args = p.parse_args(argv)
+    ledger = DeletionLedger(args.workspace)
+    epoch = ledger.epoch()
+    if Path(args.out).name != args.out or not args.out.endswith('.json'):
+        p.error('--out must be a JSON filename; exports are stored beside the managed workspace')
     markets = [v.strip() for v in args.markets.split(",") if v.strip()]
     cats = [v.strip() for v in args.categories.split(",") if v.strip()]
     if any(c not in QUERIES for c in cats):
@@ -391,9 +398,7 @@ def main(argv=None):
                 "error_type": type(err).__name__,
                 "note": "Vision failed; no investment conclusion was produced",
             })
-    output = Path(args.out)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    output = ledger.export(args.out, result, scope=args.environment, epoch=epoch)
     print(f"Discovered {result['offers_found']} listings; vision analyzed {len(result['vision_results'])}; saved {output}")
 
 
