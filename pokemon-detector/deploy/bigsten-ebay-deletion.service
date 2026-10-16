@@ -1,0 +1,17 @@
+# /etc/systemd/system/bigsten-ebay-deletion.service
+[Unit]
+Description=BIGSTEN eBay Marketplace Account Deletion receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bigsten
+WorkingDirectory=/srv/bigsten/scrpr/pokemon-detector
+# chmod 600; holds EBAY_PRODUCTION_CLIENT_ID/SECRET, EBAY_DELETION_ENDPOINT, EBAY_DELETION_VERIFICATION_TOKEN
+EnvironmentFile=/etc/bigsten/ebay.env
+ExecStart=/srv/bigsten/venv/bin/python ebay_deletion_server.py --db /srv/bigsten/private/bigsten_workspace.sqlite --environment production --host 127.0.0.1 --port 8766
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

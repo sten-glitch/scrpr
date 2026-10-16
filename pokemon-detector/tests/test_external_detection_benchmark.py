@@ -19,6 +19,8 @@ from external_detection_benchmark import (
 
 try:
     from PIL import Image
+    import cv2
+    import numpy
     HAS_PIL=True
 except ImportError:
     HAS_PIL=False
@@ -31,7 +33,7 @@ def synthetic_photo():
     return b.getvalue()
 
 
-@unittest.skipUnless(HAS_PIL,"Pillow required for synthetic image tests")
+@unittest.skipUnless(HAS_PIL,"Pillow, OpenCV and NumPy required for image benchmark tests")
 class TestYOLODetectionBenchmark(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()

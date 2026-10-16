@@ -1,1 +1,3 @@
 tcgdex/
+private/
+*.deletion-key

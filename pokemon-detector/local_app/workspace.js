@@ -237,6 +237,34 @@
            " — " + String(item.explanation || ""));
     });
     if (!findings.length) text(area,"p","No independently checkable seller claim was extracted.");
+    const analysis = lead.analysis || {};
+    const photo = analysis.image_analysis;
+    if (photo && photo.images > 0) {
+      text(area,"strong","Saved photo analysis");
+      text(area,"p",String(photo.images) + " photo(s) reviewed · " +
+        String(photo.observations || 0) + " provisional object(s). Original photos are not stored.");
+      (analysis.visual_reference_matches || []).slice(0,20).forEach((match) => {
+        text(area,"p","Reference result: " + String(match.status || "ABSTAIN"));
+        (match.candidates || []).slice(0,3).forEach((candidate) => {
+          text(area,"p",String(candidate.identity_key || "Unknown") + " — visual candidate, not verified");
+        });
+      });
+    }
+      if (lead.analysis && lead.source !== 'ebay' && !/ebay\./i.test(lead.source_url || '') && !/ebay/i.test(JSON.stringify(lead.analysis))) {
+      const download = text(area,"button","Export saved analysis JSON ↓","secondary");
+      download.type = "button";
+      download.addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(lead.analysis,null,2)],{type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href=url;
+        link.download="bigsten-analysis-" + lead.id + ".json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url),1000);
+      });
+    }
     text(area,"p","Product images/identity, market sales, inventory and full costs are not certified by this analysis.");
     if (lead.source_url) {
       const link = document.createElement("a");

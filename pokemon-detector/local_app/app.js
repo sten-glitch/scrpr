@@ -102,6 +102,8 @@
       summary = "OpenCV/OCR unavailable. Photographs were NOT automatically recognized. Claims need manual inspection.";
     } else if (analyzed.mode === "opencv_offline") {
       summary = "Local OpenCV/OCR produced provisional detections. Exact printing, grade and authenticity remain unverified.";
+    } else if (analyzed.mode === "rfdetr_offline") {
+      summary = "Local RF-DETR Nano produced provisional card boxes. Exact printing, grade and authenticity remain unverified.";
     } else if (analyzed.mode === "manual_observations") {
       summary = "Evaluation based on manually supplied observation JSON. BIGSTEN has not independently authenticated it.";
     } else if (data.status === "TEXT_ONLY_NO_VISUAL_PROOF") {
@@ -201,6 +203,20 @@
       byId("engineMode").textContent =
         "Local Alpha · Catalog " + cards +
         " · Visual refs " + (health.reference_index_loaded ? refs : "not configured");
+      const capability = health.capabilities || {};
+      byId("runtimeNotice").textContent =
+        (capability.photo_detection_available
+          ? "Photo detection is available. "
+          : "Photo detection is unavailable; text review still works. ") +
+        (capability.ocr_available
+          ? "Printed-text reading is available. "
+          : "Printed-text reading is not configured. ") +
+        (health.reference_index_loaded
+          ? "Reference matching is available; matches remain candidates. "
+          : "Add a reference collection to search for visual card matches. ") +
+        (capability.rfdetr_enabled
+          ? "The local RF-DETR Nano card detector is active."
+          : "The trained RF-DETR card detector is not connected to this photo lab.");
     })
     .catch(() => {
       byId("engineMode").textContent = "Local Alpha · Engine status unavailable";

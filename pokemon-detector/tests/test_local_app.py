@@ -158,6 +158,8 @@ class TestAlphaHttp(unittest.TestCase):
         self.assertEqual(code,200)
         data=json.loads(body)
         self.assertFalse(data["public_deployment_allowed"])
+        self.assertFalse(data["capabilities"]["rfdetr_enabled"])
+        self.assertIn(data["capabilities"]["photo_detector"],{"opencv","unavailable"})
         self.assertEqual(self.server.server_address[0],"127.0.0.1")
         self.assertEqual(headers["Cache-Control"],"no-store")
 

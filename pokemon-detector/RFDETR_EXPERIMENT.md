@@ -61,13 +61,37 @@ cannot automatically catch transformed near-duplicates.
 
 On your own PC from the pokemon-detector directory, open PowerShell:
 
-    py -3 -m venv .venv
+    py -3.13 -m venv .venv
     .venv\Scripts\python.exe -m pip install -r requirements-rfdetr.txt
 
 This installs RF-DETR 1.11.2 and free local libraries. PyTorch libraries and
 model weight files are large; CPU can be slow. Initial checkpoint download
 requires internet but inference afterward runs locally. Check PyTorch's
 official GPU installation instructions for your actual NVIDIA GPU/driver.
+
+### Local preflight (no training or weight downloads)
+
+Install the training extra for the full API import check:
+
+    .venv\Scripts\python.exe -m pip install "rfdetr[train]==1.11.2"
+    .\test-rfdetr-local.ps1
+
+For an NVIDIA host, use the matching CUDA build from the official PyTorch
+index. The Windows/Python 3.13 RTX 4050 preparation uses:
+
+    .venv\Scripts\python.exe -m pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    .\test-rfdetr-local.ps1 -RequireCuda
+
+The script checks dependency consistency, regression tests, the pinned vendor
+API imports and an actual tensor kernel. It writes `private/rfdetr-preflight.json`.
+A passing environment check does not mean a card model or dataset is available.
+When the authorized dataset and your trusted checkpoint are available:
+
+    .\test-rfdetr-local.ps1 -RequireCuda -Dataset private/roboflow-source -Checkpoint private/rfdetr-nano-card/checkpoint_best_total.pth
+
+The optional checkpoint check runs one blank synthetic frame only; it is not an
+accuracy benchmark. The dataset check also decodes images and confirms RF-DETR's
+resolved YAML paths match the directories audited for split leakage.
 
 Do NOT install RF-DETR in the ordinary inexpensive BIGSTEN alpha CI, and
 do not upload untrusted .pth/.ckpt file bytes or Python pickle objects.
@@ -86,6 +110,11 @@ the source images and annotations:
   training add --allow-cpu, which may consume considerable time/RAM/power.
 - The trainer requires TRAIN, VALID and untouched TEST subdirectories,
   the expected YOLO card class and non-overlapping SHA-256 image hashes.
+- Unsupported image formats, oversized files and malformed/unknown-class YOLO
+  labels fail the audit instead of being silently omitted. Mixed COCO/YOLO
+  layouts and YAML redirection to different split directories are rejected.
+- `run_test=False` is explicit. DataLoader workers are set to zero for a simple
+  Windows pilot; external training loggers are disabled.
 - The user permissions flag is an attestation, not a legal verification.
 - Model weights and output remain under ignored private/.
 - The official model may fetch an initial pretrained Apache-licensed
@@ -122,11 +151,31 @@ annotation boxes are evaluated. RF-DETR load/predict failures abort the
 experiment; they are not quietly reclassified as "bad photo" exclusions.
 Photo-level errors appear side by side.
 
+Paired reports compare SHA-256 digests of parsed annotation coordinates as well
+as source image bytes and box counts. Old reports without annotation digests
+must be rerun. Real checkpoint loading also requires the Nano model family.
+
 The report gives box precision, recall, F1, true/false positives and misses.
 There are NO product IDs, editions, authentic grades, sold prices,
 valuation differences, or investment returns in this comparison.
 
 ## E. Release decision — only with actual trained model and real data
+
+### Optional local web application integration
+
+After validating your trusted Nano card checkpoint, launch a separate local
+instance (port 8767 avoids an existing OpenCV instance on 8765):
+
+    .venv\Scripts\python.exe local_app.py --port 8767 --open-browser --rfdetr-checkpoint private/rfdetr-nano-card/checkpoint_best_total.pth --rfdetr-confidence 0.5
+
+Uploads now use RF-DETR boxes with the existing optional OCR, reference matcher,
+claim checks and persistent workspace. Saved reports record the checkpoint hash
+and confidence threshold. Inference failures abort the request rather than
+falling back silently or saving a misleading report. Concurrent RF-DETR calls
+are serialized. Without the checkpoint option the application keeps OpenCV.
+This integration's automated HTTP tests use synthetic images and a stub detector;
+they do not establish real-model accuracy. Installing RF-DETR alone does not
+enable the trained detector.
 
 For P1 research, decide whether RF-DETR is worth its extra compute only
 after a representative, independently annotated dataset has been tested.
@@ -143,5 +192,6 @@ difficult foil/reflection and phone-shot images.
 - Commercial deployment requires data/artwork licenses, model weights/source
   rights, multi-tenant security, measured false decisions and full data costs.
 
-The default BIGSTEN web application and public detector remain untouched;
-this experiment exists only in the draft development branch.
+The default BIGSTEN web application still uses OpenCV; RF-DETR is an explicit
+local startup option. The public detector remains unchanged. This experiment
+exists only in the draft development branch.

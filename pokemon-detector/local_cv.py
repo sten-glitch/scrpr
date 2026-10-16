@@ -44,7 +44,8 @@ def _checked_image(image_bytes: bytes):
             if w < 24 or h < 24 or w * h > 12_000_000:
                 raise LocalCVError("Image pixel dimensions exceed safe bounds")
             img.load()  # PIL's pixel/decompression limit applies before cv2 decode
-            rgb = img.convert("RGB")
+            from PIL import ImageOps
+            rgb = ImageOps.exif_transpose(img).convert("RGB")
         mat = cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
     except LocalCVError:
         raise
@@ -148,14 +149,15 @@ def _ocr_card(cv2, mat, box: list[float]) -> tuple[str | None, str | None]:
 
 
 def analyze_local_photo(image_bytes: bytes, *, image_index: int=0, max_cards=30,
-                        catalog: list[dict] | None=None, run_ocr=True) -> dict:
+                        catalog: list[dict] | None=None, run_ocr=True, detector=None) -> dict:
     """Return normalized-observation-compatible provisional visible objects.
 
     If card rectangles cannot be found or OCR is missing, abstain instead of
     claiming an unseen card. The catalog can suggest names, not verify print.
     """
     cv2, image = _checked_image(image_bytes)
-    boxes = detect_card_boxes(cv2,image,max_cards=max_cards)
+    boxes = detector(image) if detector is not None else detect_card_boxes(cv2,image,max_cards=max_cards)
+    engine = "RF-DETR" if detector is not None else "OpenCV"
     observations = []
     for box in boxes:
         name, number = _ocr_card(cv2,image,box) if run_ocr else (None,None)
@@ -173,21 +175,21 @@ def analyze_local_photo(image_bytes: bytes, *, image_index: int=0, max_cards=30,
               + (["set_unreadable"] if not name else []),
         })
     return {"kind": "binder" if len(observations) > 1 else "single",
-            "summary": f"Local OpenCV candidate rectangles: {len(boxes)}. OCR is provisional; exact print not verified.",
+            "summary": f"Local {engine} candidate rectangles: {len(boxes)}. OCR is provisional; exact print not verified.",
             "inventory_complete": False, "observations": observations,
             "uncertainties": [
-                "Classical vision can mistake sleeves, stickers, photos and packaging for cards",
+                "Detection can mistake sleeves, stickers, photos and packaging for cards",
                 "OCR can misread card names/numbers; set, foil, authenticity and edition remain unverified",
                 "Photo quantity is not proof of unique physical cards",
             ]}
 
 
-def combine_local_observations(images: list[bytes], *, run_ocr=True) -> dict:
+def combine_local_observations(images: list[bytes], *, run_ocr=True, detector=None) -> dict:
     if not isinstance(images, list) or not 1 <= len(images) <= 8:
         raise LocalCVError("1–8 images expected")
     observations, uncertainties = [], []
     for idx, data in enumerate(images):
-        result = analyze_local_photo(data, image_index=idx, run_ocr=run_ocr)
+        result = analyze_local_photo(data, image_index=idx, run_ocr=run_ocr, detector=detector)
         observations.extend(result["observations"])
         uncertainties.extend(result["uncertainties"])
     if len(observations) > 100:
@@ -195,7 +197,7 @@ def combine_local_observations(images: list[bytes], *, run_ocr=True) -> dict:
         uncertainties.append("Detection count truncated to 100 provisional objects")
     return {
         "kind": "binder" if len(observations)>1 else "single",
-        "summary": f"OpenCV provisional detections in {len(images)} images: {len(observations)} objects",
+        "summary": f"{'RF-DETR' if detector is not None else 'OpenCV'} provisional detections in {len(images)} images: {len(observations)} objects",
         "inventory_complete": False, "observations": observations,
         "uncertainties": list(dict.fromkeys(uncertainties)),
     }

@@ -508,15 +508,10 @@ def main(argv=None):
 
     cands = pick_candidates(rows)
     log(f'Candidați pentru eBay/CardTrader: {len(cands)}')
-    if os.environ.get('EBAY_CLIENT_ID') and os.environ.get('EBAY_CLIENT_SECRET'):
-        try:
-            st = ebay_lookup(cands, fx, os.environ['EBAY_CLIENT_ID'], os.environ['EBAY_CLIENT_SECRET'])
-            sources['eBay DE/FR/IT/ES/UK/US'] = {'status': 'ok' if st['calls'] else 'eroare', 'at': day,
-                                                 'note': f"{st['calls']} căutări, {st['errors']} erori"}
-        except Exception as e:
-            sources['eBay DE/FR/IT/ES/UK/US'] = {'status': 'eroare', 'note': str(e)[:200]}
-    else:
-        sources['eBay DE/FR/IT/ES/UK/US'] = {'status': 'lipsă cheie', 'note': 'adaugă EBAY_CLIENT_ID și EBAY_CLIENT_SECRET'}
+    # Git/Pages cannot selectively erase historical seller data. eBay discovery
+    # now persists only through the private workspace deletion registry.
+    sources['eBay DE/FR/IT/ES/UK/US'] = {'status': 'private_workspace_only',
+        'note': 'Căutarea eBay este disponibilă în Scannerul privat; publicarea în Git/Pages este oprită.'}
     log('eBay:', sources['eBay DE/FR/IT/ES/UK/US'])
     if os.environ.get('CARDTRADER_TOKEN'):
         try:

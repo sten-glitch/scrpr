@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>BIGSTEN — Graded Intelligence</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui;background:#0a111a;color:#e8f0f7}*{box-sizing:border-box}body{margin:0}main{max-width:1080px;margin:auto;padding:32px 24px 70px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #29394b;padding-bottom:22px}a{color:#d1ee9e}h1{font-size:clamp(30px,5vw,48px);letter-spacing:-.05em;margin-bottom:12px}p{line-height:1.6}.muted{color:#92a8b9}.eyebrow{color:#d1ee9e;letter-spacing:.15em;font-size:12px}section{background:#121d2a;border:1px solid #29394b;padding:24px;border-radius:14px;margin:20px 0}label{display:block;margin:12px 0 6px;color:#b9ccdc;font-size:13px}input,select,textarea,button{font:inherit;border-radius:7px;padding:11px;border:1px solid #455970}input,select,textarea{background:#0a111a;color:#fff;width:100%}button{background:#d1ee9e;color:#132014;cursor:pointer;font-weight:700}button.secondary{background:#253549;color:#e8f0f7}button:disabled{opacity:.5;cursor:wait}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.row{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.metric{background:#0a111a;padding:16px;border-radius:8px}.metric strong{display:block;font:28px ui-monospace,monospace;margin-bottom:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:400px;overflow:auto}#notice{color:#e7c88b}.listing{padding:14px 0;border-bottom:1px solid #29394b}summary{cursor:pointer;color:#b9ccdc}#results:empty{display:none}@media(max-width:650px){.grid{grid-template-columns:1fr}main{padding:20px 15px}section{padding:18px}}
+</style></head><body><main>
+<header><b>BIGSTEN</b><a href="/workspace">Deschide workbench →</a></header>
+<p class="eyebrow">GRADED POKÉMON INTELLIGENCE</p><h1>Identitate. Certificate. Exemplare observate.</h1>
+<p class="muted">PSA, BGS și CGC · Engleză și japoneză · Analiză locală. AI plătit dezactivat.</p>
+<section><h2>Caută un card gradat</h2><label for="query">Descriere sau certificat</label><input id="query" placeholder="Pikachu #003 PSA 10 Japanese / PSA 12345678" maxlength="500">
+<details><summary>Identitate exactă — completează dacă o cunoști</summary><div class="grid">
+<div><label for="set_id">ID set din catalog</label><input id="set_id"></div><div><label for="number">Număr card</label><input id="number"></div><div><label for="variant">Variantă</label><input id="variant" placeholder="holo / normal / reverse"></div>
+<div><label for="language">Limba cardului</label><select id="language"><option value="">Necunoscută</option><option value="en">Engleză</option><option value="ja">Japoneză</option></select></div>
+<div><label for="grader">Compania de grading</label><select id="grader"><option value="">Din descriere</option><option>PSA</option><option>BGS</option><option>CGC</option></select></div><div><label for="grade">Notă</label><input id="grade" placeholder="10"></div>
+</div></details>
+<label for="environment">Sursa căutării eBay</label><select id="environment"><option value="sandbox">Sandbox — verificare integrare</option><option value="production">Production — anunțuri reale</option></select>
+<div class="row"><button id="resolve">Interpretează local</button><button id="search" class="secondary">Caută pe eBay UK / US / DE</button></div>
+<p class="muted">Căutarea eBay necesită credențiale configurate local. Acoperire limitată: oferte cu preț fix, livrabile în România, maximum două pagini per piață.</p></section>
+<section><h2>Citește eticheta certificatului</h2><p class="muted">O fotografie dreaptă, cu un singur slab. Păstrăm textul OCR și incertitudinea; verificarea la compania de grading este indisponibilă.</p>
+<label for="photo">Fotografie JPG / PNG / WebP, maximum 5 MiB</label><input id="photo" type="file" accept="image/jpeg,image/png,image/webp"><div class="row"><button id="read">Citește local</button></div></section>
+<section><h2>Grupează observații revizuite</h2><p class="muted">Importă un JSON local cu observații de anunțuri. Numai certificatele cu dovadă explicită sunt grupate. Imaginile reutilizate rămân semnale de verificat.</p>
+<label for="observations">Fișier JSON — listă de observații</label><input id="observations" type="file" accept="application/json,.json"><div class="row"><button id="supply">Calculează grupurile</button></div></section>
+<p id="notice" role="status" aria-live="polite"></p><section id="results"></section>
+<p class="muted">Rezultatele privesc observațiile colectate. Un certificat citit sau existent în registru nu dovedește autenticitatea obiectului fotografiat.</p>
+</main><script src="/graded.js" defer></script></body></html>

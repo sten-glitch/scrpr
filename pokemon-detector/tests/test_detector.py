@@ -56,9 +56,9 @@ class Parse(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             root = Path(t)
             (root / 'Scarlet & Violet' / '151').mkdir(parents=True)
-            (root / 'Scarlet & Violet.ts').write_text('const serie = { id: "sv" }')
-            (root / 'Scarlet & Violet' / '151.ts').write_text(SET_TS)
-            (root / 'Scarlet & Violet' / '151' / '199.ts').write_text(CARD_VARIANTS_TS)
+            (root / 'Scarlet & Violet.ts').write_text('const serie = { id: "sv" }',encoding='utf-8')
+            (root / 'Scarlet & Violet' / '151.ts').write_text(SET_TS,encoding='utf-8')
+            (root / 'Scarlet & Violet' / '151' / '199.ts').write_text(CARD_VARIANTS_TS,encoding='utf-8')
             cards, exp = d.load_tcgdex(root)
         c = cards[(733794, '')]
         self.assertEqual((c['no'], c['tp_group'], c['ct']), ('199/165', 23237, 261377))

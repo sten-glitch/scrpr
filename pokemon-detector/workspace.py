@@ -20,6 +20,7 @@ from contextlib import closing
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from urllib.parse import urlsplit
+from ebay_deletion import DeletionLedger
 
 KINDS = {"single", "graded", "sealed", "lot", "binder"}
 SOURCES = {"manual", "community", "ebay", "cardmarket", "cardtrader",
@@ -158,12 +159,15 @@ class WorkspaceStore:
     def __init__(self, path="private/bigsten_workspace.sqlite"):
         self.path = Path(path).expanduser().resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.deletions = DeletionLedger(self.path)
         self._initialize()
 
     def _connect(self):
+        self.deletions.enforce()  # never serve data of a deleted account or past retention
         db = sqlite3.connect(str(self.path), timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA secure_delete=ON")
         db.execute("PRAGMA busy_timeout=10000")
         return db
 
@@ -240,6 +244,30 @@ class WorkspaceStore:
                     );
                 """)
 
+    def save_supply_snapshot(self, report, *, epoch=None):
+        """Extend the existing private DB; retain reports, never image payloads."""
+        if not isinstance(report, dict):
+            raise WorkspaceError("Snapshot must be an object")
+        snapshot_id = uuid.uuid4().hex
+        with closing(self._connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            self.deletions.register(db, 'snapshot', snapshot_id, report, epoch=epoch)
+            packed = json.dumps(report, ensure_ascii=False, allow_nan=False)
+            if len(packed) > 1_000_000 or any(k in packed for k in ('"base64":', '"image_files":', '"api_key":')):
+                raise WorkspaceError("Invalid or oversized supply snapshot")
+            db.execute("CREATE TABLE IF NOT EXISTS supply_snapshots (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, report_json TEXT NOT NULL)")
+            db.execute("INSERT INTO supply_snapshots VALUES (?,?,?)", (snapshot_id, _now(), packed))
+        return snapshot_id
+
+    def get_supply_snapshot(self, snapshot_id):
+        if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{32}", snapshot_id):
+            raise WorkspaceError("Invalid snapshot ID")
+        with closing(self._connect()) as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='supply_snapshots'").fetchone():
+                return None
+            row = db.execute("SELECT report_json FROM supply_snapshots WHERE id=?", (snapshot_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+
     def _event(self, db, listing_id, action, details):
         db.execute("INSERT INTO events(listing_id,happened_at,action,detail_json) VALUES (?,?,?,?)",
                    (listing_id,_now(),action,json.dumps(details,ensure_ascii=False,separators=(",",":"))))
@@ -274,6 +302,10 @@ class WorkspaceStore:
         with closing(self._connect()) as db:
             try:
                 with db:
+                    db.execute('BEGIN IMMEDIATE')
+                    self.deletions.register(db, 'listing', uid, {**data, 'analysis': analysis}, scope=data.get('environment'))
+                    if analysis is not None:  # register stripped seller IDs from analysis in place
+                        packed = json.dumps(analysis,ensure_ascii=False,allow_nan=False)
                     db.execute("""INSERT INTO listings
                         (id,title,description,kind,source,source_url,external_id,asking_eur,status,created_at,updated_at,analysis_json,note)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
@@ -516,6 +548,8 @@ class WorkspaceStore:
 
     def export(self):
         with closing(self._connect()) as db:
+            if db.execute("SELECT 1 FROM ebay_artifacts WHERE kind='listing' LIMIT 1").fetchone() or db.execute("SELECT 1 FROM listings WHERE source='ebay' OR lower(source_url) LIKE '%ebay.%' LIMIT 1").fetchone():
+                raise WorkspaceError('Workspace contains eBay data; use managed exports subject to account deletion')
             ids=[r["id"] for r in db.execute("SELECT id FROM listings ORDER BY created_at LIMIT 300")]
         return {"exported_at":_now(),"private_local_workspace":True,
                 "listings":[self.get_listing(i) for i in ids],

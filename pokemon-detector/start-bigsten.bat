@@ -3,7 +3,11 @@ setlocal
 cd /d "%~dp0"
 echo BIGSTEN Local Alpha - private localhost only
 echo Open http://127.0.0.1:8765 in your browser.
-py -3 local_app.py --port 8765
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" local_app.py --port 8765 --open-browser %*
+) else (
+  py -3 local_app.py --port 8765 --open-browser %*
+)
 if errorlevel 1 (
   echo.
   echo Python 3 was not found or the local app failed to start.

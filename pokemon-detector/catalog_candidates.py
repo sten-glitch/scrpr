@@ -17,7 +17,7 @@ def _text(value):
     if not isinstance(value,str):
         return ""
     normalized=unicodedata.normalize("NFKD",value).casefold()
-    return " ".join(re.findall(r"[a-z0-9]+","".join(ch for ch in normalized if not unicodedata.combining(ch))))
+    return " ".join(re.findall(r"[^\W_]+","".join(ch for ch in normalized if not unicodedata.combining(ch)), flags=re.UNICODE))
 
 
 def _number(value):
