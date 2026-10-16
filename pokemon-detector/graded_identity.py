@@ -79,7 +79,8 @@ def resolve_query(query, catalog):
         if fields.get("language") and fields["language"] != language:
             conflicts.append("language")
         fields.setdefault("language", language)
-    nums = re.findall(r"#\s*([A-Za-z]*\d+(?:/\d+)?)", text)
+    # "#003" or printed-number form "4/102" (no '#').
+    nums = re.findall(r"#\s*([A-Za-z]*\d+(?:/\d+)?)", text) or re.findall(r"(?<![\w/.#])(\d{1,3}/\d{1,3})(?![\w/])", text)
     if len(set(map(number, nums))) > 1:
         conflicts.append("number")
     elif nums:
@@ -97,6 +98,13 @@ def resolve_query(query, catalog):
         conflicts.append("unsupported grader/language")
     if fields.get("certification_number") and not re.fullmatch(r"[0-9]{6,16}", fields["certification_number"]):
         conflicts.append("certificate format requires review")
+    def names_of(row):
+        return [row.get("name", "")] + list(row.get("aliases") or [])
+
+    def named_in_text(n):
+        return bool(norm(n)) and re.search(r"(?<!\w)" + re.escape(norm(n)) + r"(?!\w)", norm(text)) is not None
+    # Card names (or aliases) the text explicitly mentions; a different card never becomes a candidate.
+    text_names = {norm(n) for row in catalog if isinstance(row, dict) for n in names_of(row) if named_in_text(n)}
     candidates = []
     for row in catalog:
         if not isinstance(row, dict) or row.get("kind") == "sealed":
@@ -111,13 +119,16 @@ def resolve_query(query, catalog):
             continue
         if fields.get("number"):
             wanted, actual = number(fields["number"]), number(row["number"])
-            if wanted != actual and ("/" in wanted or wanted != actual.split("/")[0]):
+            # Compare totals only when both sides carry one ("4/102" vs catalog "4").
+            if wanted != actual and ("/" in wanted and "/" in actual or wanted.split("/")[0] != actual.split("/")[0]):
                 continue
-        names = [row.get("name", "")] + list(row.get("aliases") or [])
+        names = names_of(row)
+        if text_names and not text_names & set(map(norm, names)):
+            continue
         if fields.get("name") and norm(fields["name"]) not in map(norm, names):
             continue
         explicit_anchor = any(fields.get(k) for k in ("identity_key", "name", "set_id", "set", "number"))
-        name_in_text = any(norm(n) and re.search(r"(?<!\w)" + re.escape(norm(n)) + r"(?!\w)", norm(text)) for n in names)
+        name_in_text = any(named_in_text(n) for n in names)
         if not explicit_anchor and not name_in_text:
             continue
         candidates.append({"identity_key": row["identity_key"], "name": row.get("name"),

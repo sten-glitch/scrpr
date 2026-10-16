@@ -33,6 +33,22 @@ class GradedIdentityTests(unittest.TestCase):
         self.assertEqual(result["status"], "NEEDS_CLARIFICATION")
         self.assertFalse(result["queries"])
 
+    def test_printed_number_without_hash_matches_catalog_number(self):
+        cat = CAT + [{"identity_key": "en:base1:4:holo", "name": "Charizard", "set_id": "base1",
+                      "set": "Base Set", "number": "4", "language": "en", "finish": "holo"}]
+        r = resolve_query("Charizard 4/102 PSA 10", cat)
+        self.assertEqual(r["fields"]["number"], "4/102")
+        self.assertEqual([c["identity_key"] for c in r["candidates"]], ["en:base1:4:holo"])
+        r = resolve_query({"text": "Charizard 4/102 PSA 10 English", "set_id": "base1", "variant": "holo"}, cat)
+        self.assertEqual(r["status"], "RESOLVED_QUERY")
+        self.assertEqual(resolve_query("Charizard 5/102 PSA 10", cat)["candidates"], [])
+
+    def test_named_card_never_matches_other_card_by_number(self):
+        cat = CAT + [{"identity_key": "ja:set:3:other", "name": "トランセル", "set_id": "set",
+                      "set": "Example set", "number": "003", "language": "ja", "finish": "normal"}]
+        r = resolve_query({"text": "Pikachu #003 PSA 10 Japanese", "set_id": "set"}, cat)
+        self.assertEqual([c["name"] for c in r["candidates"]], ["ピカチュウ"])
+
     def test_exclusions_and_speculative_grade(self):
         for text in ("Pokemon PSA 10 empty slab", "Pokemon raw could grade PSA 10", "Pokemon sealed booster PSA 10"):
             self.assertEqual(metadata_prefilter({"title": text})["status"], "EXCLUDED")
