@@ -1,0 +1,16 @@
+# /etc/systemd/system/bigsten-scanner.service
+# Scanner on the SAME database as the receiver. Listens on 127.0.0.1 only (no auth: never expose).
+# Use from your PC:  ssh -L 8765:127.0.0.1:8765 bigsten@SERVER   then open http://127.0.0.1:8765
+[Unit]
+Description=BIGSTEN scanner (private, localhost only)
+After=bigsten-ebay-deletion.service
+
+[Service]
+User=bigsten
+WorkingDirectory=/srv/bigsten/scrpr/pokemon-detector
+EnvironmentFile=/etc/bigsten/ebay.env
+ExecStart=/srv/bigsten/venv/bin/python local_app.py --port 8765 --workspace-db /srv/bigsten/private/bigsten_workspace.sqlite
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

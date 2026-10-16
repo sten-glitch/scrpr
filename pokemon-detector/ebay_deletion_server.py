@@ -107,7 +107,8 @@ def receive(raw, header, ledger, keys, environment):
     verify_signature(raw, header, keys)
     try:
         payload = json.loads(raw)
-        if payload['metadata']['topic'] != 'MARKETPLACE_ACCOUNT_DELETION' or payload['metadata']['schemaVersion'] != '1.0':
+        # Any schemaVersion: rejecting a future version would stop deletions and mark the endpoint down.
+        if payload['metadata']['topic'] != 'MARKETPLACE_ACCOUNT_DELETION' or not isinstance(payload['metadata'].get('schemaVersion'), str):
             raise ValueError()
         notification = payload['notification']
         ledger.enqueue(notification['notificationId'], notification['data'], environment)
@@ -177,6 +178,7 @@ def worker(ledger, stop):
         try:
             if ledger.process_one():
                 continue
+            ledger.purge_expired()  # enforce retention even while the scanner is idle
         except Exception:
             # No payloads, URLs, account IDs or secrets in operational logs.
             print('eBay deletion cleanup failed; retry pending', flush=True)

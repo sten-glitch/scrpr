@@ -391,12 +391,22 @@ def main(argv=None):
     p.add_argument("--catalog", help="Optional trusted exact-identity catalog JSON array")
     p.add_argument("--observation", help="Offline cached vision JSON (no API call)")
     p.add_argument("--out", help="Write result to JSON file instead of stdout")
+    p.add_argument("--workspace", default="private/bigsten_workspace.sqlite",
+                   help="eBay results are written only as managed exports beside this workspace")
     args = p.parse_args(argv)
     def read(path):
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     result = analyze_listing(read(args.listing), read(args.catalog) if args.catalog else [],
                              observation=read(args.observation) if args.observation else None)
+    if "ebay" in json.dumps(read(args.listing)).lower():
+        # eBay-derived output must stay deletable: managed export only, never stdout or arbitrary paths.
+        if not args.out or os.path.basename(args.out) != args.out or not args.out.endswith(".json"):
+            p.error("eBay listings require --out as a JSON filename (stored as a managed export)")
+        from ebay_deletion import DeletionLedger
+        ledger = DeletionLedger(args.workspace)
+        print(f"Saved {ledger.export(args.out, result, scope='*', epoch=ledger.epoch())}")
+        return
     output = json.dumps(result, ensure_ascii=False, indent=2)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:

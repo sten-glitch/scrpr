@@ -1,5 +1,7 @@
+import re
 from typing import Literal, Optional
-from pydantic import BaseModel, HttpUrl
+from urllib.parse import urlsplit
+from pydantic import BaseModel, HttpUrl, field_validator
 
 
 class ScrapeRequest(BaseModel):
@@ -9,6 +11,14 @@ class ScrapeRequest(BaseModel):
     wait_ms: int = 1000
     extract: Literal["html", "text"] = "html"
     priority: Literal["high", "normal"] = "normal"
+
+    @field_validator("url")
+    @classmethod
+    def no_ebay(cls, url):
+        # eBay data must come only via official APIs and the deletion ledger; never into Redis/logs here.
+        if re.search(r"(^|\.)ebay(img)?\.[a-z.]+$", (urlsplit(url).hostname or "").lower()):
+            raise ValueError("eBay pages are not scraped; use the official API integration")
+        return url
 
 
 class ScrapeResponse(BaseModel):

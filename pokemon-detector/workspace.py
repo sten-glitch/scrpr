@@ -163,6 +163,7 @@ class WorkspaceStore:
         self._initialize()
 
     def _connect(self):
+        self.deletions.enforce()  # never serve data of a deleted account or past retention
         db = sqlite3.connect(str(self.path), timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
@@ -247,13 +248,13 @@ class WorkspaceStore:
         """Extend the existing private DB; retain reports, never image payloads."""
         if not isinstance(report, dict):
             raise WorkspaceError("Snapshot must be an object")
-        packed = json.dumps(report, ensure_ascii=False, allow_nan=False)
-        if len(packed) > 1_000_000 or any(k in packed for k in ('"base64":', '"image_files":', '"api_key":')):
-            raise WorkspaceError("Invalid or oversized supply snapshot")
         snapshot_id = uuid.uuid4().hex
         with closing(self._connect()) as db, db:
             db.execute('BEGIN IMMEDIATE')
             self.deletions.register(db, 'snapshot', snapshot_id, report, epoch=epoch)
+            packed = json.dumps(report, ensure_ascii=False, allow_nan=False)
+            if len(packed) > 1_000_000 or any(k in packed for k in ('"base64":', '"image_files":', '"api_key":')):
+                raise WorkspaceError("Invalid or oversized supply snapshot")
             db.execute("CREATE TABLE IF NOT EXISTS supply_snapshots (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, report_json TEXT NOT NULL)")
             db.execute("INSERT INTO supply_snapshots VALUES (?,?,?)", (snapshot_id, _now(), packed))
         return snapshot_id
@@ -303,6 +304,8 @@ class WorkspaceStore:
                 with db:
                     db.execute('BEGIN IMMEDIATE')
                     self.deletions.register(db, 'listing', uid, {**data, 'analysis': analysis}, scope=data.get('environment'))
+                    if analysis is not None:  # register stripped seller IDs from analysis in place
+                        packed = json.dumps(analysis,ensure_ascii=False,allow_nan=False)
                     db.execute("""INSERT INTO listings
                         (id,title,description,kind,source,source_url,external_id,asking_eur,status,created_at,updated_at,analysis_json,note)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",

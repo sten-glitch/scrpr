@@ -41,6 +41,7 @@ class VisionCostRouter:
             """)
 
     def _connect(self):
+        self.deletions.enforce()
         db = sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
         db.execute('PRAGMA secure_delete=ON')
         return db

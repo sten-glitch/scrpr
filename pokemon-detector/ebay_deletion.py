@@ -19,6 +19,14 @@ class DeletionBlocked(ValueError):
     pass
 
 
+def retention_hours():
+    """API License 8.1(c)/3.1(b): listing data older than 6h may not be displayed; keep no longer by default."""
+    hours = float(os.environ.get('BIGSTEN_EBAY_RETENTION_HOURS', '6'))
+    if not 0 < hours <= 24 * 30:
+        raise ValueError('BIGSTEN_EBAY_RETENTION_HOURS must be >0 and <=720')
+    return hours
+
+
 def seller_identity(item):
     seller = item.get('seller') or {}
     if isinstance(seller, str):
@@ -67,6 +75,11 @@ class DeletionLedger:
             if 'complete' not in {r[1] for r in db.execute('PRAGMA table_info(ebay_items)')}:
                 db.execute('ALTER TABLE ebay_items ADD COLUMN complete INTEGER NOT NULL DEFAULT 0')
                 db.commit()
+            if 'created' not in {r[1] for r in db.execute('PRAGMA table_info(ebay_artifacts)')}:
+                # Pre-existing artifacts start their retention clock at upgrade time.
+                db.execute('ALTER TABLE ebay_artifacts ADD COLUMN created REAL')
+                db.execute('UPDATE ebay_artifacts SET created=?', (time.time(),))
+                db.commit()
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=10)
@@ -92,7 +105,10 @@ class DeletionLedger:
             return self.epoch(db)
 
     def register(self, db, kind, identifier, payload, *, scope=None, epoch=None):
-        """Call inside BEGIN IMMEDIATE, in the same transaction as the write."""
+        """Call inside BEGIN IMMEDIATE, in the same transaction as the write.
+
+        Strips raw seller identifiers from ``payload`` in place: serialize it only after this call.
+        """
         if epoch is not None and epoch != self.epoch(db):
             raise DeletionBlocked('Account deletion occurred during processing; retry with fresh inputs')
         scope = scope or (payload.get('environment') if isinstance(payload, dict) else None) or '*'
@@ -125,6 +141,10 @@ class DeletionLedger:
                             db.execute('INSERT OR REPLACE INTO ebay_items VALUES(?,?,?,?)', (scope, hashed, json.dumps(sorted(found)), int(complete)))
                     aliases.update(found)
                     unknown = unknown or not found or not complete
+                    # API License 8.2.1(c): raw eBay user IDs never reach storage; keyed aliases above keep deletion working.
+                    obj.pop('seller_identity', None)
+                    if isinstance(obj.get('seller'), (str, dict)):
+                        obj.pop('seller')
                 for value in obj.values():
                     if isinstance(value, (dict, list)):
                         walk(value)
@@ -135,8 +155,28 @@ class DeletionLedger:
         tombstones = {r[0] for r in db.execute("SELECT alias FROM ebay_tombstones WHERE scope=? OR ?='*'", (scope, scope))}
         if aliases & tombstones or (unknown and tombstones):
             raise DeletionBlocked('eBay data suppressed or ownership unresolved after an account deletion')
-        db.execute('INSERT OR REPLACE INTO ebay_artifacts VALUES(?,?,?,?,?,?)',
-                   (kind, identifier, scope, json.dumps(sorted(aliases)), json.dumps(sorted(items)), int(unknown)))
+        db.execute('INSERT OR REPLACE INTO ebay_artifacts(kind,id,scope,aliases,items,unknown,created) VALUES(?,?,?,?,?,?,?)',
+                   (kind, identifier, scope, json.dumps(sorted(aliases)), json.dumps(sorted(items)), int(unknown), time.time()))
+
+    def enforce(self):
+        """Before any read/write: finish acknowledged deletions, then expire old data (fail closed on error)."""
+        if self.status()['pending']:
+            while self.process_one():
+                pass
+        self.purge_expired()
+
+    def purge_expired(self, now=None):
+        """Remove every registered eBay artifact older than the retention window. Returns count removed."""
+        cutoff = (now or time.time()) - retention_hours() * 3600
+        with closing(self.connect()) as db:
+            if not db.execute('SELECT 1 FROM ebay_artifacts WHERE created<? LIMIT 1', (cutoff,)).fetchone():
+                return 0  # common path: no write lock on reads
+        with closing(self.connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            expired = db.execute('SELECT kind,id FROM ebay_artifacts WHERE created<?', (cutoff,)).fetchall()
+            for kind, identifier in expired:
+                self._remove(db, kind, identifier)
+        return len(expired)
 
     def enqueue(self, event_id, identity, scope):
         aliases = self.aliases(identity)

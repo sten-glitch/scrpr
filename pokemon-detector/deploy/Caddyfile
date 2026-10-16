@@ -1,0 +1,14 @@
+# Public HTTPS for the eBay Account Deletion callback ONLY. Caddy obtains/renews TLS automatically.
+# Replace ebay-hook.example.com with your DNS name (A/AAAA record -> this server).
+# No `log` directive: Caddy writes no access logs, so challenge codes/bodies are never logged.
+ebay-hook.example.com {
+	request_body {
+		max_size 64KB
+	}
+	handle /api/ebay/marketplace-account-deletion {
+		reverse_proxy 127.0.0.1:8766
+	}
+	handle {
+		respond 404
+	}
+}

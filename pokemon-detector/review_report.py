@@ -183,6 +183,9 @@ def main(argv=None):
     p.add_argument("--out", default="review.html")
     args = p.parse_args(argv)
     data = json.loads(Path(args.result_json).read_text(encoding="utf-8"))
+    if "ebay" in json.dumps(data).lower():
+        # shortcut: HTML copies cannot be tracked by the deletion ledger; add an HTML managed export if this is needed.
+        p.error("eBay-derived results cannot be rendered to unmanaged HTML; review them in the local app")
     rendered = render_report(data, photo_dir=args.photo_dir)
     Path(args.out).write_text(rendered, encoding="utf-8")
     print(f"Saved local review report: {args.out}")

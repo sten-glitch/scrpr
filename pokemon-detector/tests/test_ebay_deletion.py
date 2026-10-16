@@ -76,6 +76,61 @@ class LedgerTests(unittest.TestCase):
                 self.store.create_listing(data)
             self.ledger.process_one()
 
+    def test_raw_seller_ids_never_stored_but_deletion_still_matches(self):
+        def hit():
+            return {'item_id': 'v1|9|0', 'marketplace': 'ebay_gb', 'title': 'PSA 10', 'seller': 'alice',
+                    'seller_identity': {'username': 'alice', 'userId': 'id-alice', 'eiasToken': 'eias-alice'}}
+        snap = self.store.save_supply_snapshot({'environment': 'production', 'listings': [hit()]})
+        self.ledger.export('x.json', {'environment': 'production', 'offers': [hit()]},
+                           scope='production', epoch=self.ledger.epoch())
+        self.store.create_listing(listing())
+        stored = self.path.read_bytes() + (self.path.parent / 'managed_ebay_exports/x.json').read_bytes()
+        for raw in (b'alice', b'seller_identity', b'"seller"'):
+            self.assertNotIn(raw, stored)
+        self.assertEqual(self.store.get_supply_snapshot(snap)['listings'][0]['item_id'], 'v1|9|0')
+        self.ledger.enqueue('event', {'userId': 'id-alice'}, 'production')
+        self.ledger.process_one()
+        self.assertIsNone(self.store.get_supply_snapshot(snap))
+        self.assertFalse((self.path.parent / 'managed_ebay_exports/x.json').exists())
+        self.assertEqual(self.query('SELECT COUNT(*) FROM listings'), [(0,)])
+
+    def test_retention_purges_expired_ebay_data_only(self):
+        import time
+        old = self.store.save_supply_snapshot({'environment': 'production', 'listings': [
+            {'item_id': '1', 'marketplace': 'ebay_gb', 'seller_identity': {'userId': 'u1'}}]})
+        manual = self.store.save_supply_snapshot({'counts': {'x': 1}})
+        self.ledger.export('old.json', {'environment': 'production', 'offers': [{'item_id': '1', 'source': 'ebay'}]},
+                           scope='production', epoch=self.ledger.epoch())
+        self.assertEqual(self.ledger.purge_expired(now=time.time() + 5 * 3600), 0)
+        with patch.dict('os.environ', {'BIGSTEN_EBAY_RETENTION_HOURS': '6'}):
+            self.assertEqual(self.ledger.purge_expired(now=time.time() + 7 * 3600), 2)
+        self.assertIsNone(self.store.get_supply_snapshot(old))
+        self.assertIsNotNone(self.store.get_supply_snapshot(manual))
+        self.assertFalse((self.path.parent / 'managed_ebay_exports/old.json').exists())
+        with patch.dict('os.environ', {'BIGSTEN_EBAY_RETENTION_HOURS': '0'}), self.assertRaises(ValueError):
+            self.ledger.purge_expired()
+
+    def test_acknowledged_deletion_applied_before_next_read(self):
+        snap = self.store.save_supply_snapshot({'environment': 'production', 'listings': [
+            {'item_id': '1', 'marketplace': 'ebay_gb', 'seller_identity': {'userId': 'u1'}}]})
+        self.ledger.enqueue('event', {'userId': 'u1'}, 'production')  # receiver ACKed; worker not run
+        self.assertIsNone(self.store.get_supply_snapshot(snap))
+        self.assertTrue(self.ledger.status()['ready'])
+
+    def test_cli_exports_of_ebay_results_are_managed_or_refused(self):
+        import vision, review_report
+        src = Path(self.temp.name) / 'in.json'
+        src.write_text(json.dumps({'source': 'ebay', 'listing_id': '1'}), encoding='utf-8')
+        with patch('vision.analyze_listing', return_value={'listing_id': '1', 'listing_url': 'https://www.ebay.de/itm/1'}):
+            for argv in ([str(src)], [str(src), '--out', str(Path(self.temp.name) / 'free.json')]):
+                with self.assertRaises(SystemExit):
+                    vision.main(argv + ['--workspace', str(self.path)])
+            vision.main([str(src), '--out', 'r.json', '--workspace', str(self.path)])
+        self.assertTrue((self.path.parent / 'managed_ebay_exports/r.json').exists())
+        self.assertTrue(self.query("SELECT 1 FROM ebay_artifacts WHERE kind='export' AND id='r.json'"))
+        with self.assertRaises(SystemExit):
+            review_report.main([str(self.path.parent / 'managed_ebay_exports/r.json'), '--out', str(Path(self.temp.name) / 'r.html')])
+
     def test_eias_and_username_replaced_with_userid(self):
         self.store.create_listing(listing())
         self.ledger.enqueue('event', {'username': 'id-alice'}, 'production')
@@ -231,6 +286,17 @@ class ReceiverTests(unittest.TestCase):
     def signature(self, raw=None):
         sig = self.private.sign(raw or self.raw, ec.ECDSA(hashes.SHA1()))
         return base64.b64encode(json.dumps({'kid': 'test-key', 'alg': 'ecdsa', 'digest': 'SHA1', 'signature': base64.b64encode(sig).decode()}).encode()).decode()
+
+    def test_future_schema_version_still_deletes_wrong_topic_rejected(self):
+        keys = lambda kid: self.material
+        payload = dict(self.payload, metadata={'topic': 'MARKETPLACE_ACCOUNT_DELETION', 'schemaVersion': '2.0'})
+        raw = json.dumps(payload).encode()
+        receive(raw, self.signature(raw), self.ledger, keys, 'production')
+        self.assertFalse(self.ledger.status()['ready'])
+        payload['metadata']['topic'] = 'OTHER'
+        raw = json.dumps(payload).encode()
+        with self.assertRaises(ValueError):
+            receive(raw, self.signature(raw), self.ledger, keys, 'production')
 
     def test_challenge_exact_url(self):
         url = 'https://example.com' + ROUTE
