@@ -1,0 +1,16 @@
+# OPTIONAL heavy local ML dependencies, not part of normal BIGSTEN alpha/CI.
+# The plain RFDETR Nano COCO model does NOT detect Pokemon cards as a class.
+# Provide a legally usable PRIVATE fine-tuned card checkpoint before comparing.
+# Model weights are not included in GitHub.
+#
+# Python 3.12 venv:
+#   python -m pip install -r requirements-rfdetr.txt
+#
+# To fine-tune on your authorized TRAIN / VALID / TEST split, additionally:
+#   python -m pip install 'rfdetr[train]==1.11.2'
+#
+# PyTorch dependencies may be large and/or GPU-specific; official install:
+#   https://rfdetr.roboflow.com/latest/getting-started/install/
+#
+-r requirements-local.txt
+rfdetr==1.11.2

@@ -1,2 +1,15 @@
 __pycache__/
 docs/data/
+artifacts/
+private/
+local-data/
+photos/
+vision_catalog.json
+sale_evidence_result.json
+flip_outcomes_report.json
+review.html
+result.json
+labeled_cases.json
+*.private.csv
+sales.csv
+*.receipts.csv

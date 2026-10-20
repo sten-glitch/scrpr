@@ -1,0 +1,452 @@
+"""BIGSTEN Internet Photo Sources — rights-aware, local research imports.
+
+Sources are public discovery material, NOT independently proven rights to
+commercially sublicense Pokémon artwork. No source photo is embedded into
+the public Git repository, labeled as a specific card, or treated as a
+completed-sale proof.
+
+Commands:
+  python external_photo_sources.py sources
+  python external_photo_sources.py commons --max-images 12
+  python external_photo_sources.py roboflow --source detector
+  python external_photo_sources.py roboflow --source binder
+
+Roboflow download uses OFFICIAL SDK with ROBOFLOW_API_KEY and accessible
+public dataset version. No account bypass/scraping; no credentials stored
+in GitHub. Results go under private/ (gitignored).
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import html
+import json
+import os
+import re
+import shutil
+import urllib.parse
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+SOURCES = {
+    "detector": {
+        "title": "Pokemon card detector",
+        "url": "https://universe.roboflow.com/tcg-card-dectector/pokemon-card-detector-gksmy",
+        "license_displayed": "CC BY 4.0",
+        "workspace": "tcg-card-dectector",
+        "project": "pokemon-card-detector-gksmy",
+        "version": 1,
+        "task": "object_detection",
+        "identity_labels": False,
+        "photos_reported": 494,
+        "notes": "Published 3-class box annotations; card class ID must be read from exported data.yaml",
+    },
+    "binder": {
+        "title": "Pokemon card binder",
+        "url": "https://universe.roboflow.com/cardbinder/pokemon-card-binder",
+        "license_displayed": "CC BY 4.0",
+        "workspace": "cardbinder",
+        "project": "pokemon-card-binder",
+        "version": 1,
+        "task": "object_detection",
+        "identity_labels": False,
+        "photos_reported": 36,
+        "notes": "Public dataset and version must remain accessible; boxes are NOT card identities",
+    },
+    "scanner": {
+        "title": "Pokemon Scanner (instance segmentation)",
+        "url": "https://universe.roboflow.com/pokemon-card-detection-a3etk/pokemon-scanner-bzqii",
+        "license_displayed": "CC BY 4.0",
+        "workspace": "pokemon-card-detection-a3etk",
+        "project": "pokemon-scanner-bzqii",
+        "version": 1,
+        "task": "instance_segmentation",
+        "identity_labels": False,
+        "photos_reported": 1239,
+        "notes": "Polygon masks can be reduced to provisional card bounding boxes; no exact card ID",
+    },
+    "commons": {
+        "title": "Wikimedia Commons: Pokemon Trading Card Game",
+        "url": "https://commons.wikimedia.org/wiki/Category:Pok%C3%A9mon_Trading_Card_Game",
+        "license_displayed": "Per-file; inspect author/license/underlying art separately",
+        "task": "unlabeled_research_photos",
+        "identity_labels": False,
+        "notes": "Category includes logos, people, events; discovery does NOT imply a card is visible",
+    },
+}
+
+# Exact thumbnails linked by the public Roboflow dataset page as examples.
+# These are UNLABELED previews, not guaranteed by the uploader to be owned,
+# accurate, or independently cleared for downstream commercial use.
+PUBLIC_ROBOFLOW_PREVIEWS = (
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/08xJWiqOpJif2IzGrR7f/thumb.jpg",
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0B8uOnE24QytHZReG4oC/thumb.jpg",
+    "https://source.roboflow.com/q9csgEIIjngZzBnKqDOeOCAfjuj2/0DaJGzfqRmLZn4LyuMy8/thumb.jpg",
+)
+
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+USER_AGENT = "BigstenLocalResearch/0.2 (contact: see project github.com/sten-glitch/scrpr)"
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+COMMONS_LICENSES = ("CC BY", "CC-BY", "CC0", "PUBLIC DOMAIN", "CC BY-SA", "CC-BY-SA")
+ALLOWED_IMAGE_HOSTS = {"upload.wikimedia.org", "thumb.wikimedia.org"}
+IMAGE_SUFFIX = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+class PhotoSourceError(ValueError):
+    pass
+
+
+def now_iso():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def _meta_text(value):
+    if isinstance(value, dict):
+        value = value.get("value", "")
+    if not isinstance(value, str):
+        return ""
+    value = re.sub(r"<[^>]+>", " ", value)
+    return html.unescape(value).strip()[:400]
+
+
+def _allowed_commons_license(name):
+    upper = str(name or "").upper().strip()
+    return (upper == "CC0" or upper in {"PUBLIC DOMAIN", "PUBLIC DOMAIN MARK"}
+            or upper.startswith("CC BY ") or upper.startswith("CC-BY-")
+            or upper.startswith("CC BY-SA ") or upper.startswith("CC-BY-SA-"))
+
+
+def _public_commons_image_url(url: str) -> str:
+    if not isinstance(url, str) or len(url) > 2048:
+        raise PhotoSourceError("Missing Commons image URL")
+    parsed = urllib.parse.urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname not in ALLOWED_IMAGE_HOSTS
+            or parsed.username or parsed.password or parsed.port not in (None, 443)
+            or parsed.fragment):
+        raise PhotoSourceError("Only official HTTPS Wikimedia image hosts are allowed")
+    return url
+
+
+def _request_json(url: str) -> dict:
+    # Called only with self-constructed fixed Commons API URL.
+    if urllib.parse.urlsplit(url).netloc != "commons.wikimedia.org":
+        raise PhotoSourceError("Unexpected metadata API endpoint")
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
+                                                    "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=18) as response:
+        if response.status != 200:
+            raise PhotoSourceError("Commons metadata API returned non-200")
+        raw = response.read(3 * 1024 * 1024 + 1)
+    if len(raw) > 3 * 1024 * 1024:
+        raise PhotoSourceError("Oversized Commons API metadata response")
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise PhotoSourceError("Invalid Commons response")
+    return data
+
+
+def discover_commons(limit=50, *, search=None) -> list[dict]:
+    """Discover licensed-photo candidates via official Commons API.
+
+    Search is opt-in, file-namespace-limited and must not be mistaken for
+    a labeled dataset. Only the first official API page is inspected.
+    """
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
+        raise PhotoSourceError("Commons limit must be 1..50")
+    q = {
+        "action": "query", "format": "json",
+        "prop": "imageinfo", "iiprop": "url|size|extmetadata",
+        "iiurlwidth": "1024",
+    }
+    if search is not None:
+        if not isinstance(search,str) or not 3<=len(search.strip())<=100:
+            raise PhotoSourceError("Commons search must be between 3 and 100 characters")
+        q.update({"generator":"search",
+                  "gsrsearch":search.strip(),
+                  "gsrnamespace":"6","gsrlimit":"50"})
+    else:
+        q.update({"generator":"categorymembers",
+                  "gcmtitle":"Category:Pokémon Trading Card Game",
+                  "gcmtype":"file","gcmlimit":"max"})
+    url = COMMONS_API + "?" + urllib.parse.urlencode(q)
+    payload = _request_json(url)
+    pages = (payload.get("query") or {}).get("pages") or {}
+    results = []
+    for page in pages.values() if isinstance(pages, dict) else []:
+        if not isinstance(page, dict):
+            continue
+        title = page.get("title", "")
+        if not isinstance(title, str) or Path(title).suffix.lower() not in IMAGE_SUFFIX:
+            continue
+        images = page.get("imageinfo") or []
+        if not images or not isinstance(images[0], dict):
+            continue
+        item = images[0]
+        ext = item.get("extmetadata") or {}
+        license_text = _meta_text(ext.get("LicenseShortName"))
+        if not _allowed_commons_license(license_text):
+            continue
+        file_url = item.get("thumburl") or item.get("url")
+        try:
+            _public_commons_image_url(file_url)
+        except PhotoSourceError:
+            continue
+        # File size may exceed 5 MiB; the scaled 1024-pixel thumbnail is
+        # checked separately during download. Missing metadata = review.
+        source_link = "https://commons.wikimedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))
+        results.append({
+            "source": "commons", "source_title": title,
+            "source_page": source_link, "image_url": file_url,
+            "author": _meta_text(ext.get("Artist") or ext.get("Attribution")),
+            "license": license_text,
+            "license_url": _meta_text(ext.get("LicenseUrl")),
+            "usage_terms": _meta_text(ext.get("UsageTerms")),
+            "copyright_subcontents_reviewed": False,
+            "attribution_review_required": True,
+            "identity_confirmed": False,
+            "annotation_verified": False,
+            "status": "UNLABELED_LICENSED_PHOTO_CANDIDATE",
+        })
+    return sorted(results, key=lambda item: item["source_title"])[:limit]
+
+
+def _safe_image_download(url: str) -> bytes:
+    _public_commons_image_url(url)
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
+                                                    "Accept": "image/*"})
+    with urllib.request.urlopen(request, timeout=25) as response:
+        # Reject an unexpected redirect to a different host or scheme.
+        _public_commons_image_url(response.geturl())
+        if response.status != 200:
+            raise PhotoSourceError("Image download failed")
+        mime = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if mime not in ("image/png", "image/jpeg", "image/webp"):
+            raise PhotoSourceError("Unexpected Wikimedia photo MIME type")
+        raw = response.read(MAX_IMAGE_BYTES + 1)
+    if not 0 < len(raw) <= MAX_IMAGE_BYTES:
+        raise PhotoSourceError("Image exceeds local alpha 5 MiB limit")
+    if not (raw.startswith(b"\xff\xd8\xff") and raw.endswith(b"\xff\xd9")
+            or raw.startswith(b"\x89PNG\r\n\x1a\n")
+            or (raw[:4] == b"RIFF" and raw[8:12] == b"WEBP")):
+        raise PhotoSourceError("Invalid image signature")
+    return raw
+
+
+def import_commons(max_images=12, root="private/web-research/commons", *, dry_run=False, search=None):
+    """Store only reviewed-license photo candidates with machine attribution.
+
+    Does NOT automatically count toward benchmark. The selected images may
+    not depict individual cards, and artwork/subcontent rights need review.
+    """
+    if isinstance(max_images, bool) or not 1 <= max_images <= 50:
+        raise PhotoSourceError("max_images must be 1..50")
+    candidates = discover_commons(limit=50, search=search)
+    dst = Path(root).expanduser().resolve()
+    if not dry_run:
+        if dst.exists() and any(dst.iterdir()):
+            raise PhotoSourceError("Target folder already contains files; refusing overwrite")
+        dst.mkdir(parents=True, exist_ok=True)
+    saved, failed = [], []
+    rate_limited = False
+    for item in candidates:
+        if len(saved) >= max_images:
+            break
+        record = dict(item)
+        suffix = Path(urllib.parse.urlsplit(item["image_url"]).path).suffix.lower()
+        if suffix not in IMAGE_SUFFIX:
+            suffix = ".jpg"
+        photo_name = "commons_" + hashlib.sha256(item["source_page"].encode()).hexdigest()[:20] + suffix
+        record["image_file"] = photo_name
+        if dry_run:
+            record["status"] = "CANDIDATE_NOT_DOWNLOADED"
+            saved.append(record)
+            continue
+        try:
+            binary = _safe_image_download(item["image_url"])
+            # The photo remains only in this private local directory.
+            (dst / photo_name).write_bytes(binary)
+            record["photo_sha256"] = hashlib.sha256(binary).hexdigest()
+            record["bytes"] = len(binary)
+            record["status"] = "DOWNLOADED_UNLABELED_RESEARCH_PHOTO"
+            saved.append(record)
+        except (OSError, PhotoSourceError) as exc:
+            failed.append({"source_page": item["source_page"],
+                           "reason": str(exc)[:140]})
+            # Respect Wikimedia's rate limiting: do not hammer the same
+            # publisher repeatedly with more image requests after HTTP 429.
+            if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+                rate_limited = True
+                break
+    meta = {
+        "source": "Wikimedia Commons",
+        "source_registry": SOURCES["commons"],
+        "search_query":search,
+        "manual_card_presence_review_required":True,
+        "imported_at_utc": now_iso(),
+        "license_disclaimer": (
+            "Per-file photo license does not automatically authorize commercial "
+            "reuse of Pokémon card artwork or cropped third-party content. "
+            "Retain author attribution and license link; verify before reuse."
+        ),
+        "identity_verified": False,
+        "benchmark_ready": False,
+        "dry_run": bool(dry_run),
+        "stopped_after_http_429":rate_limited,
+        "items": saved, "failed": failed,
+    }
+    if not dry_run:
+        (dst / "SOURCE_ATTRIBUTION.json").write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
+    return meta
+
+
+def import_roboflow_public_previews(root="private/web-research/roboflow-previews",
+                                     *, dry_run=False):
+    """Download ONLY publicly linked example thumbnails, no API key.
+
+    These are ~200px samples, useful for smoke tests but not a reliable
+    catalog reference library or exact-identity validation set.
+    """
+    target=Path(root).expanduser().resolve()
+    if not dry_run:
+        if target.exists() and any(target.iterdir()):
+            raise PhotoSourceError("Preview destination already contains files; refusing overwrite")
+        target.mkdir(parents=True,exist_ok=True)
+    saved,errors=[],[]
+    for i,url in enumerate(PUBLIC_ROBOFLOW_PREVIEWS, start=1):
+        if (urllib.parse.urlsplit(url).hostname!="source.roboflow.com"
+                or not url.endswith("/thumb.jpg")):
+            raise PhotoSourceError("Preview must be exact publicly linked Roboflow image")
+        item={
+            "source":"roboflow-public-preview",
+            "source_page":SOURCES["detector"]["url"],
+            "image_url":url,
+            "image_file":f"roboflow_preview_{i:02d}.jpg",
+            "license_displayed":SOURCES["detector"]["license_displayed"],
+            "dataset_publisher":"TCG card dectector",
+            "photographer_rights_verified":False,
+            "pokemon_artwork_rights_verified":False,
+            "exact_card_identity_verified":False,
+            "annotation_verified":False,
+            "commercial_reuse_cleared":False,
+            "status":"CANDIDATE_NOT_DOWNLOADED" if dry_run else "PENDING",
+        }
+        if dry_run:
+            saved.append(item)
+            continue
+        try:
+            request=urllib.request.Request(url, headers={
+                "User-Agent":USER_AGENT,"Accept":"image/jpeg"})
+            with urllib.request.urlopen(request,timeout=20) as response:
+                if (response.status!=200 or
+                        urllib.parse.urlsplit(response.geturl()).hostname!="source.roboflow.com"):
+                    raise PhotoSourceError("Roboflow preview was not served by trusted host")
+                mime=response.headers.get("Content-Type","").split(";")[0].lower()
+                if mime!="image/jpeg":
+                    raise PhotoSourceError("Unexpected preview MIME type")
+                raw=response.read(MAX_IMAGE_BYTES+1)
+            if not 0<len(raw)<=MAX_IMAGE_BYTES or not (raw.startswith(b"\xff\xd8\xff") and raw.endswith(b"\xff\xd9")):
+                raise PhotoSourceError("Malformed or oversized preview")
+            (target/item["image_file"]).write_bytes(raw)
+            item["photo_sha256"]=hashlib.sha256(raw).hexdigest()
+            item["bytes"]=len(raw)
+            item["status"]="DOWNLOADED_PUBLIC_UNLABELED_PREVIEW"
+            saved.append(item)
+        except (OSError,PhotoSourceError) as exc:
+            errors.append({"source_page":item["source_page"],
+                           "preview_number":i,"reason":str(exc)[:120]})
+    data={
+        "source":"Roboflow public dataset page examples",
+        "imported_at":now_iso(),"dry_run":bool(dry_run),
+        "benchmark_ready":False,"exact_card_identity_verified":False,
+        "commercial_rights_cleared":False,
+        "notes":"Public previews only; tiny photos and dataset CC BY label do not confirm embedded Pokemon artwork rights, individual photographer consent or exact card printing.",
+        "items":saved,"failed":errors,
+    }
+    if not dry_run:
+        (target/"SOURCE_ATTRIBUTION.json").write_text(
+            json.dumps(data,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+    return data
+
+
+def download_roboflow(dataset: str, root="private/web-research"):
+    """Use Roboflow's documented authenticated export SDK, not scraping.
+
+    Requires an accessible public dataset version and ROBOFLOW_API_KEY.
+    No API key is saved in the research metadata or Git repository.
+    """
+    if dataset not in ("detector", "binder", "scanner"):
+        raise PhotoSourceError("Select detector, binder or scanner public source")
+    key = os.environ.get("ROBOFLOW_API_KEY", "").strip()
+    if not key:
+        raise PhotoSourceError(
+            "Roboflow export requires your Roboflow account/API key in "
+            "ROBOFLOW_API_KEY; do not paste keys into chat or GitHub."
+        )
+    try:
+        import roboflow
+    except ImportError as exc:
+        raise PhotoSourceError("Install optional official SDK: python -m pip install roboflow") from exc
+    source = SOURCES[dataset]
+    dest = Path(root).expanduser().resolve() / ("roboflow-" + dataset)
+    if dest.exists() and any(dest.iterdir()):
+        raise PhotoSourceError("Refusing to overwrite an existing Roboflow dataset export")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # The SDK handles authentication and export through the provider's
+    # authorized API, including provider limits and access restrictions.
+    rf = roboflow.Roboflow(api_key=key)
+    project = rf.workspace(source["workspace"]).project(source["project"])
+    downloaded = project.version(source["version"]).download(
+        "yolov8", location=str(dest), overwrite=False
+    )
+    dest_path = Path(downloaded.location).resolve()
+    if not dest_path.is_dir() or not (dest_path / "data.yaml").is_file():
+        raise PhotoSourceError("Roboflow export is missing data.yaml")
+    result = {
+        "source": source, "downloaded_at_utc": now_iso(),
+        "dataset_directory": str(dest_path),
+        "license_published": source["license_displayed"],
+        "dataset_original_artwork_rights_verified": False,
+        "identity_labels": False, "benchmark_ready": False,
+        "notes": "Use for card bounding-box detection only. Check data.yaml "
+                 "class indices, independent splits and original content rights. "
+                 "Never count raw provider labels as authenticated printing IDs.",
+    }
+    (dest_path / "SOURCE_ATTRIBUTION.json").write_text(
+        json.dumps(result, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
+    return result
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(
+        description="BIGSTEN research image sources; rights and identities require review"
+    )
+    commands = p.add_subparsers(dest="command", required=True)
+    commands.add_parser("sources", help="List verified public source descriptions")
+    commons = commands.add_parser("commons", help="Fetch Commons photo candidates locally")
+    commons.add_argument("--max-images", type=int, default=12)
+    commons.add_argument("--out", default="private/web-research/commons")
+    commons.add_argument("--dry-run", action="store_true")
+    commons.add_argument("--search", help="Optional Wikimedia file search instead of the Pokémon TCG category")
+    previews = commands.add_parser("previews", help="Fetch three public dataset thumbnail examples without API key")
+    previews.add_argument("--out",default="private/web-research/roboflow-previews")
+    previews.add_argument("--dry-run",action="store_true")
+    roboflow = commands.add_parser("roboflow", help="Official Roboflow authenticated dataset export")
+    roboflow.add_argument("--source", choices=["detector", "binder", "scanner"], required=True)
+    roboflow.add_argument("--out", default="private/web-research")
+    a = p.parse_args(argv)
+    if a.command == "sources":
+        result = SOURCES
+    elif a.command == "commons":
+        result = import_commons(a.max_images, a.out, dry_run=a.dry_run,search=a.search)
+    elif a.command == "previews":
+        result = import_roboflow_public_previews(a.out,dry_run=a.dry_run)
+    else:
+        result = download_roboflow(a.source, a.out)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
